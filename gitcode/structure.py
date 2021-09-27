@@ -115,6 +115,7 @@ def get_commit (goid):
 
 def checkout(name):
     goid=get_goid(name)
+    #print(goid)
     commit = get_commit(goid)
     read_tree(commit.tree)
     #build.update_ref('HEAD',build.RefValue(symbolic=False,value=goid))
@@ -140,8 +141,8 @@ def get_goid(name):
         'refs/heads/' + name,
     ]
     for ref in possible_refs:
-        if build.get_ref(ref).value:
-            return build.get_ref(ref,deref=False).value
+        if build.get_ref(ref,deref=False).value:
+            return build.get_ref(ref).value
 
     # Name is a SHA1 hashed object
     is_hex = all (char in string.hexdigits for char in name)
@@ -171,3 +172,21 @@ def create_branch(name,goid):
 
 def is_branch(name):
     return build.get_ref("refs/heads/" + name).value is not None
+
+
+def init():
+    build.init()
+    build.update_ref('HEAD', build.RefValue(symbolic=True,value="refs/heads/master"))
+
+
+def get_branch_name ():
+    head = build.get_ref ('HEAD', deref=False)
+    if not head.symbolic:
+        return None
+    head = head.value
+    assert head.startswith ('refs/heads/')
+    return os.path.relpath (head, 'refs/heads')
+
+def iter_branch_names ():
+    for refname, _ in build.iter_refs ('refs/heads/'):
+        yield os.path.relpath (refname, 'refs/heads/')

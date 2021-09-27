@@ -54,6 +54,7 @@ def _get_ref_internal(ref,deref):
         with open (ref_path) as file:
             value = file.read().strip()
     symbolic= bool(value) and value.startswith("ref:")
+
     if symbolic:
         value= value.split(':',1)[1].strip()
         if deref:
@@ -64,11 +65,13 @@ def _get_ref_internal(ref,deref):
 
 
 
-def iter_refs(deref=True):
+def iter_refs(prefix='',deref=True):
     refs=['HEAD']
     for root, _, filenames in os.walk(GIT_DIR+'/refs'):
         root= os.path.relpath(root, GIT_DIR)
         refs.extend(root+'/' + name for name in filenames)
 
     for ref in refs:
+        if not ref.startswith(prefix):
+            continue
         yield ref, get_ref(ref, deref=deref)

@@ -58,14 +58,18 @@ def parse():
 
     branch_parser = sub_parser.add_parser ('branch')
     branch_parser.set_defaults (func=branch)
-    branch_parser.add_argument ('name')
+    branch_parser.add_argument ('name',nargs='?')
     branch_parser.add_argument ('start_point',default='@',type=structure.get_goid ,nargs='?')
+
+    status_parser = sub_parser.add_parser ('status')
+    status_parser.set_defaults (func=status)
+
 
     return parser.parse_args()
 
 
 def init(args):
-    build.init()
+    structure.init()
     print('initialized an empty dagit directory at' + os.path.join(os.getcwd(),build.GIT_DIR) )
 
 def hash_object(args):
@@ -90,10 +94,17 @@ def log (args):
     #goid = args.goid or build.get_ref('HEAD')
     #goid=args.goid
     #while goid:
+    refs = {}
+    for refname, ref in data.iter_refs ():
+        refs.setdefault (ref.value, []).append (refname)
+
+
     for goid in structure.get_commit_and_parents({args.goid}):
         commit = structure.get_commit (goid)
 
-        print ("commit "+ goid + '\n')
+        #print ("commit "+ goid + '\n')
+        refs_str = f' ({", ".join (refs[oid])})' if oid in refs else ''
+        print (f'commit {oid}{refs_str}\n')
         print (textwrap.indent (commit.message, '    '))
         print ('')
 
@@ -129,8 +140,24 @@ def k(args):
         proc.communicate (dot.encode ())
 
 def branch(args):
-    structure.create_branch(args.name, args.start_point)
-    print("Branch " + args.name +"  created at " + args.start_point[:10])
+
+    if not args.name:
+        current = structure.get_branch_name ()
+        for branch in structure.iter_branch_names ():
+            prefix = '*' if branch == current else ' '
+            print (f'{prefix} {branch}')
+    else:
+        structure.create_branch (args.name, args.start_point)
+        print (f'Branch {args.name} created at {args.start_point[:10]}')
+
+def status (args):
+    HEAD = structure.get_oid ('@')
+    branch = structure.get_branch_name ()
+    if branch:
+        print (f'On branch {branch}')
+    else:
+        print (f'HEAD detached at {HEAD[:10]}')
+
 
 
 def main():
