@@ -143,3 +143,18 @@ def get_goid(name):
         return name
 
     assert False, f'Unknown name: ' + name
+
+
+def get_commit_and_parents(goids):
+    goids=set(goids)
+    visited= set()
+
+    while goids:
+        goid=goids.pop()
+        if not goid or goid in visited:
+            continue
+        visited.add(goid)
+        yield goid
+
+        commit=get_commit(goid)
+        goids.add(commit.parent)

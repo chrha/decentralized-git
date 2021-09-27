@@ -17,7 +17,7 @@ def hash_obj(data, type='blob'):
     return goid
 
 def get_obj(goid, expected='blob'):
-    with open (OBJ_DIR + goid, 'rb') as file:
+    with open (OBJ_DIR + goid, 'rb') as file: #was OBJ_DIR
         obj = file.read()
 
     type, empty , data = obj.partition(b'\x00')
@@ -47,3 +47,12 @@ def get_ref(ref):
     if os.path.isfile(ref_path):
         with open (ref_path) as file:
             return file.read().strip()
+
+def iter_refs():
+    refs=['HEAD']
+    for root, _, filenames in os.walk(GIT_DIR+'/refs'):
+        root= os.path.relpath(root, GIT_DIR)
+        refs.extend(root+'/' + name for name in filenames)
+
+    for ref in refs:
+        yield ref, get_ref(ref)

@@ -6,7 +6,7 @@ import sys
 import structure
 import pathlib
 import textwrap
-
+import subprocess
 
 def parse():
     parser= argparse.ArgumentParser()
@@ -52,6 +52,9 @@ def parse():
     tag_parser.add_argument ('name')
     tag_parser.add_argument ('goid',default='@',type=structure.get_goid ,nargs='?')
 
+    k_parser = sub_parser.add_parser ('k')
+    k_parser.set_defaults (func=k)
+
 
     return parser.parse_args()
 
@@ -96,6 +99,27 @@ def checkout(args):
 def tag(args):
     #goid = args.goid or build.get_ref('HEAD')
     structure.create_tag(args.name, args.goid)
+
+def k(args):
+    dot = 'digraph commits {\n'
+    goids=set()
+    for ref, name in build.iter_refs():
+        dot += f'"{ref}" [shape=note]\n'
+        dot += f'"{ref}" -> "{name}"\n'
+        goids.add(name)
+    for goid in structure.get_commit_and_parents(goids):
+        commit= structure.get_commit(goid)
+        dot += f'"{goid}" [shape=box style=filled label="{goid[:10]}"]\n'
+        if commit.parent:
+            dot += f'"{goid}" -> "{commit.parent}"\n'
+
+    dot += '}'
+    print (dot)
+
+    with subprocess.Popen (
+            ['dot', '-Tcanon', '/dev/stdin'],
+            stdin=subprocess.PIPE) as proc:
+        proc.communicate (dot.encode ())
 
 def main():
     args=parse()
