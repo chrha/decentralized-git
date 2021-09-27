@@ -2,7 +2,7 @@ import build
 import os
 import itertools
 import operator
-from collections import namedtuple
+from collections import deque,namedtuple
 from pathlib import Path
 import string
 
@@ -83,12 +83,12 @@ def ignore(path):
 
 def commit(msg):
     commit= "tree " + write_tree() + "\n"
-    parent= build.get_ref('HEAD')
+    parent= build.get_ref('HEAD').value
     if parent:
         commit += "parent " + parent
     commit += "\n" + msg + "\n"
     obj = build.hash_obj(commit.encode(),"commit")
-    build.update_ref('HEAD',obj)
+    build.update_ref('HEAD',build.RefValue(symbolic=False,value=obj))
     return obj
 
 
@@ -113,15 +113,21 @@ def get_commit (goid):
 
     return Commit (tree=tree, parent=parent, message=message)
 
-def checkout(goid):
+def checkout(name):
+    goid=get_goid(name)
     commit = get_commit(goid)
     read_tree(commit.tree)
-    build.update_ref('HEAD',goid)
+    #build.update_ref('HEAD',build.RefValue(symbolic=False,value=goid))
+    if is_branch(name):
+        head= build.RefValue(symbolic=True, value="refs/heads/"+name)
+    else:
+        head=build.RefValue(symbolic=False,value=goid)
+    build.update_ref('HEAD',head,deref=False)
 
 def create_tag(name, goid):
     # create the tag later
     tag= "refs/tags/"+name
-    build.update_ref(tag,goid)
+    build.update_ref(tag,build.RefValue(symbolic=False,value=goid))
 
 def get_goid(name):
     #return build.get_ref(name) or name
@@ -134,8 +140,8 @@ def get_goid(name):
         'refs/heads/' + name,
     ]
     for ref in possible_refs:
-        if build.get_ref(ref):
-            return build.get_ref(ref)
+        if build.get_ref(ref).value:
+            return build.get_ref(ref,deref=False).value
 
     # Name is a SHA1 hashed object
     is_hex = all (char in string.hexdigits for char in name)
@@ -146,15 +152,22 @@ def get_goid(name):
 
 
 def get_commit_and_parents(goids):
-    goids=set(goids)
+    goids=deque(goids)
     visited= set()
 
     while goids:
-        goid=goids.pop()
+        goid=goids.popleft()
         if not goid or goid in visited:
             continue
         visited.add(goid)
         yield goid
 
         commit=get_commit(goid)
-        goids.add(commit.parent)
+        goids.appendleft(commit.parent)
+
+def create_branch(name,goid):
+    build.update_ref("refs/heads/"+name, build.RefValue(symbolic=False,value=goid))
+
+
+def is_branch(name):
+    return build.get_ref("refs/heads/" + name).value is not None

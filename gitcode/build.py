@@ -1,6 +1,7 @@
 import os
 import hashlib
 from pathlib import Path
+from collections import namedtuple
 GIT_DIR = ".dagit"
 OBJ_DIR = GIT_DIR +"/objects/"
 
@@ -26,33 +27,48 @@ def get_obj(goid, expected='blob'):
     if expected is not None and type != expected:
         raise ValueError(f'Expected: {expected}, but got: {type}')
     return data
-"""
-def set_HEAD(goid):
-    with open (GIT_DIR + "/HEAD", 'w') as file:
-        file.write(goid)
 
-def get_HEAD():
-    if os.path.isfile(GIT_DIR + "/HEAD"):
-        with open (GIT_DIR + "/HEAD") as file:
-            return file.read().strip()
-"""
-def update_ref(ref,goid):
+RefValue= namedtuple("RefValue",["symbolic", "value"])
+
+def update_ref(ref,value, deref=True):
+    ref = _get_ref_internal(ref,deref)[0]
+    assert value.value
+    if value.symbolic:
+        value= "ref: " + value.value
+    else:
+        value= value.value
     ref_path= GIT_DIR+'/'+ref
     os.makedirs(os.path.dirname(ref_path), exist_ok=True)
     with open (ref_path, 'w') as file:
-        file.write(goid)
+        file.write(value)
 
-def get_ref(ref):
+
+def get_ref(ref,deref=True):
+    return _get_ref_internal(ref,deref)[1]
+
+
+def _get_ref_internal(ref,deref):
     ref_path= GIT_DIR+'/'+ref
+    value=None
     if os.path.isfile(ref_path):
         with open (ref_path) as file:
-            return file.read().strip()
+            value = file.read().strip()
+    symbolic= bool(value) and value.startswith("ref:")
+    if symbolic:
+        value= value.split(':',1)[1].strip()
+        if deref:
+            return _get_ref_internal(value, deref=True)
+    return ref,RefValue(symbolic=symbolic, value=value)
 
-def iter_refs():
+
+
+
+
+def iter_refs(deref=True):
     refs=['HEAD']
     for root, _, filenames in os.walk(GIT_DIR+'/refs'):
         root= os.path.relpath(root, GIT_DIR)
         refs.extend(root+'/' + name for name in filenames)
 
     for ref in refs:
-        yield ref, get_ref(ref)
+        yield ref, get_ref(ref, deref=deref)

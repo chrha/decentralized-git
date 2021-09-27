@@ -45,7 +45,7 @@ def parse():
 
     checkout_parser= sub_parser.add_parser("checkout")
     checkout_parser.set_defaults(func=checkout)
-    checkout_parser.add_argument("goid",type=structure.get_goid)
+    checkout_parser.add_argument("commit")
 
     tag_parser = sub_parser.add_parser ('tag')
     tag_parser.set_defaults (func=tag)
@@ -55,6 +55,11 @@ def parse():
     k_parser = sub_parser.add_parser ('k')
     k_parser.set_defaults (func=k)
 
+
+    branch_parser = sub_parser.add_parser ('branch')
+    branch_parser.set_defaults (func=branch)
+    branch_parser.add_argument ('name')
+    branch_parser.add_argument ('start_point',default='@',type=structure.get_goid ,nargs='?')
 
     return parser.parse_args()
 
@@ -83,8 +88,9 @@ def commit(args):
 def log (args):
 
     #goid = args.goid or build.get_ref('HEAD')
-    goid=args.goid
-    while goid:
+    #goid=args.goid
+    #while goid:
+    for goid in structure.get_commit_and_parents({args.goid}):
         commit = structure.get_commit (goid)
 
         print ("commit "+ goid + '\n')
@@ -94,7 +100,7 @@ def log (args):
         goid = commit.parent
 
 def checkout(args):
-    structure.checkout(args.goid)
+    structure.checkout(args.commit)
 
 def tag(args):
     #goid = args.goid or build.get_ref('HEAD')
@@ -103,10 +109,11 @@ def tag(args):
 def k(args):
     dot = 'digraph commits {\n'
     goids=set()
-    for ref, name in build.iter_refs():
+    for ref, name in build.iter_refs(deref=False):
         dot += f'"{ref}" [shape=note]\n'
-        dot += f'"{ref}" -> "{name}"\n'
-        goids.add(name)
+        dot += f'"{ref}" -> "{name.value}"\n'
+        if not name.symbolic:
+            goids.add(name.value)
     for goid in structure.get_commit_and_parents(goids):
         commit= structure.get_commit(goid)
         dot += f'"{goid}" [shape=box style=filled label="{goid[:10]}"]\n'
@@ -117,9 +124,14 @@ def k(args):
     print (dot)
 
     with subprocess.Popen (
-            ['dot', '-Tcanon', '/dev/stdin'],
+            ['dot', '-Tx11', '/dev/stdin'],
             stdin=subprocess.PIPE) as proc:
         proc.communicate (dot.encode ())
+
+def branch(args):
+    structure.create_branch(args.name, args.start_point)
+    print("Branch " + args.name +"  created at " + args.start_point[:10])
+
 
 def main():
     args=parse()
