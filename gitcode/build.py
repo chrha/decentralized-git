@@ -2,23 +2,54 @@ import os
 import hashlib
 from pathlib import Path
 from collections import namedtuple
-GIT_DIR = ".dagit"
-OBJ_DIR = GIT_DIR +"/objects/"
+from contextlib import contextmanager
+import shutil
+import json
+
+
+
+
+
+# Will be initialized in cli.main()
+GIT_DIR = None
+
+@contextmanager
+def get_index ():
+    index = {}
+    if os.path.isfile (f'{GIT_DIR}/index'):
+        with open (f'{GIT_DIR}/index') as f:
+            index = json.load (f)
+
+    yield index
+
+    with open (f'{GIT_DIR}/index', 'w') as f:
+        json.dump (index, f)
+
+
+
+@contextmanager
+def change_git_dir (new_dir):
+    global GIT_DIR
+    old_dir = GIT_DIR
+    GIT_DIR = f'{new_dir}/.dagit'
+    yield
+    GIT_DIR = old_dir
+
 
 def init():
     os.makedirs(GIT_DIR)
-    os.makedirs(OBJ_DIR)
+    os.makedirs(GIT_DIR +"/objects/")
 
 
 def hash_obj(data, type='blob'):
     obj= type.encode() + b'\x00' + data
     goid= hashlib.sha1(obj).hexdigest() # goid = Git Object ID
-    with open (OBJ_DIR + goid, 'wb') as out:
+    with open (GIT_DIR +"/objects/" + goid, 'wb') as out:
         out.write (obj)
     return goid
 
 def get_obj(goid, expected='blob'):
-    with open (OBJ_DIR + goid, 'rb') as file: #was OBJ_DIR
+    with open (GIT_DIR +"/objects/" + goid, 'rb') as file: #was OBJ_DIR
         obj = file.read()
 
     type, empty , data = obj.partition(b'\x00')
@@ -62,11 +93,13 @@ def _get_ref_internal(ref,deref):
     return ref,RefValue(symbolic=symbolic, value=value)
 
 
-
+def delete_ref (ref, deref=True):
+    ref = _get_ref_internal (ref, deref)[0]
+    os.remove (f'{GIT_DIR}/{ref}')
 
 
 def iter_refs(prefix='',deref=True):
-    refs=['HEAD']
+    refs = ['HEAD', 'MERGE_HEAD']
     for root, _, filenames in os.walk(GIT_DIR+'/refs'):
         root= os.path.relpath(root, GIT_DIR)
         refs.extend(root+'/' + name for name in filenames)
@@ -74,4 +107,22 @@ def iter_refs(prefix='',deref=True):
     for ref in refs:
         if not ref.startswith(prefix):
             continue
-        yield ref, get_ref(ref, deref=deref)
+        r = get_ref (ref, deref=deref)
+        if r.value:
+            yield ref, r
+
+def object_exists (oid):
+    return os.path.isfile (f'{GIT_DIR}/objects/{oid}')
+
+
+def fetch_object_if_missing (goid, remote_git_dir):
+    if object_exists (goid):
+        return
+    remote_git_dir += '/.dagit'
+    shutil.copy (f'{remote_git_dir}/objects/{goid}', #ändra senare
+                 f'{GIT_DIR}/objects/{goid}')
+
+def push_object (oid, remote_git_dir):
+    remote_git_dir += '/.ugit'
+    shutil.copy (f'{GIT_DIR}/objects/{oid}',
+                 f'{remote_git_dir}/objects/{oid}')

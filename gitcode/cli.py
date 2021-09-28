@@ -7,6 +7,8 @@ import structure
 import pathlib
 import textwrap
 import subprocess
+import diff
+import remote
 
 def parse():
     parser= argparse.ArgumentParser()
@@ -52,6 +54,43 @@ def parse():
     tag_parser.add_argument ('name')
     tag_parser.add_argument ('goid',default='@',type=structure.get_goid ,nargs='?')
 
+    reset_parser = sub_parser.add_parser ('reset')
+    reset_parser.set_defaults (func=reset)
+    reset_parser.add_argument ('commit', type=structure.get_goid)
+
+    show_parser = sub_parser.add_parser ('show')
+    show_parser.set_defaults (func=show)
+    show_parser.add_argument ('oid', default='@', type=structure.get_goid, nargs='?')
+
+    diff_parser = sub_parser.add_parser ('diff')
+    diff_parser.set_defaults (func=_diff)
+    diff_parser.add_argument ('--cached', action='store_true')
+    diff_parser.add_argument ('commit', nargs='?')
+
+    merge_parser = sub_parser.add_parser ('merge')
+    merge_parser.set_defaults (func=merge)
+    merge_parser.add_argument ('commit', type=structure.get_goid)
+
+    merge_base_parser = sub_parser.add_parser ('merge-base')
+    merge_base_parser.set_defaults (func=merge_base)
+    merge_base_parser.add_argument ('commit1', type=structure.get_goid)
+    merge_base_parser.add_argument ('commit2', type=structure.get_goid)
+
+    add_parser = sub_parser.add_parser ('add')
+    add_parser.set_defaults (func=add)
+    add_parser.add_argument ('files', nargs='+')
+    
+    fetch_parser = sub_parser.add_parser ('fetch')
+    fetch_parser.set_defaults (func=fetch)
+    fetch_parser.add_argument ('remote')
+
+    push_parser = sub_parser.add_parser ('push')
+    push_parser.set_defaults (func=push)
+    push_parser.add_argument ('remote')
+    push_parser.add_argument ('branch')
+
+
+
     k_parser = sub_parser.add_parser ('k')
     k_parser.set_defaults (func=k)
 
@@ -89,13 +128,23 @@ def read_tree(args):
 def commit(args):
     print(structure.commit(args.message))
 
+def reset (args):
+    structure.reset (args.commit)
+
+def _diff (args):
+    tree = args.commit and structure.get_commit (args.commit).tree
+
+    result = diff.diff_trees (structure.get_tree (tree), structure.get_working_tree ())
+    sys.stdout.flush ()
+    sys.stdout.buffer.write (result)
+
 def log (args):
 
     #goid = args.goid or build.get_ref('HEAD')
     #goid=args.goid
     #while goid:
     refs = {}
-    for refname, ref in data.iter_refs ():
+    for refname, ref in build.iter_refs ():
         refs.setdefault (ref.value, []).append (refname)
 
 
@@ -103,12 +152,29 @@ def log (args):
         commit = structure.get_commit (goid)
 
         #print ("commit "+ goid + '\n')
-        refs_str = f' ({", ".join (refs[oid])})' if oid in refs else ''
-        print (f'commit {oid}{refs_str}\n')
-        print (textwrap.indent (commit.message, '    '))
-        print ('')
+        _print_commit (goid, commit, refs.get (goid))
 
         goid = commit.parent
+
+
+def _print_commit (oid, commit, refs=None):
+    refs_str = f' ({", ".join (refs)})' if refs else ''
+    print (f'commit {oid}{refs_str}\n')
+    print (textwrap.indent (commit.message, '    '))
+    print ('')
+
+def show (args):
+    if not args.oid:
+        return
+    commit = structure.get_commit (args.oid)
+    parent_tree = None
+    if commit.parents:
+        parent_tree = structure.get_commit (commit.parents[0]).tree
+    _print_commit (args.oid, commit)
+    result = diff.diff_trees (structure.get_tree (parent_tree), structure.get_tree (commit.tree))
+    sys.stdout.flush()
+    sys.stdout.buffer.write(result)
+
 
 def checkout(args):
     structure.checkout(args.commit)
@@ -128,8 +194,8 @@ def k(args):
     for goid in structure.get_commit_and_parents(goids):
         commit= structure.get_commit(goid)
         dot += f'"{goid}" [shape=box style=filled label="{goid[:10]}"]\n'
-        if commit.parent:
-            dot += f'"{goid}" -> "{commit.parent}"\n'
+        for parent in commit.parents:
+            dot += f'"{goid}" -> "{parent}"\n'
 
     dot += '}'
     print (dot)
@@ -151,17 +217,48 @@ def branch(args):
         print (f'Branch {args.name} created at {args.start_point[:10]}')
 
 def status (args):
-    HEAD = structure.get_oid ('@')
+    HEAD = structure.get_goid ('@')
     branch = structure.get_branch_name ()
     if branch:
         print (f'On branch {branch}')
     else:
         print (f'HEAD detached at {HEAD[:10]}')
+    
+    merge_head = build.get_ref ('MERGE_HEAD').value
+    if merge_head:
+        print (f'Merging with {merge_head[:10]}')
 
+    print ('\nChanges to be committed:\n')
+    HEAD_tree = HEAD and structure.get_commit (HEAD).tree
+    for path, action in diff.iter_changed_files (structure.get_tree (HEAD_tree),
+                                                 structure.get_index_tree ()):
+        print (f'{action:>12}: {path}')
+
+    print ('\nChanges not staged for commit:\n')
+    for path, action in diff.iter_changed_files (structure.get_index_tree (),
+                                                 structure.get_working_tree ()):
+        print (f'{action:>12}: {path}')
+
+def merge (args):
+    structure.merge (args.commit)
+
+def merge_base (args):
+    print (structure.get_merge_base (args.commit1, args.commit2))
+
+def fetch (args):
+    remote.fetch (args.remote)
+
+
+def push (args):
+    remote.push (args.remote, f'refs/heads/{args.branch}')
+
+def add (args):
+    structure.add (args.files)
 
 
 def main():
-    args=parse()
-    args.func(args)
+    with build.change_git_dir ('.'):
+        args = parse ()
+        args.func (args)
 
 main()

@@ -5,27 +5,39 @@ import operator
 from collections import deque,namedtuple
 from pathlib import Path
 import string
+import diff
 
-def write_tree(directory="."):
-    entries = []
-    with os.scandir(directory) as iter:
-        for entry in iter:
-            path= directory+'/'+entry.name
-            if ignore(path):
-                continue
-            if entry.is_file(follow_symlinks=False):
-                type="blob"
+def write_tree ():
+    # Index is flat, we need it as a tree of dicts
+    index_as_tree = {}
+    with build.get_index () as index:
+        for path, oid in index.items ():
+            path = path.split ('/')
+            dirpath, filename = path[:-1], path[-1]
 
-                with open(path, 'rb') as f:
-                    goid = build.hash_obj(f.read())
-            elif entry.is_dir(follow_symlinks=False):
-                type="tree"
-                goid=write_tree(path)
-            entries.append((entry.name, goid,type))
+            current = index_as_tree
+            # Find the dict for the directory of this file
+            for dirname in dirpath:
+                current = current.setdefault (dirname, {})
+            current[filename] = oid
 
-    tree=''.join(type + ' ' + goid + ' ' + name + '\n'
-                for name,goid,type in sorted(entries))
-    return build.hash_obj(tree.encode(),"tree")
+    def write_tree_recursive (tree_dict):
+        entries = []
+        for name, value in tree_dict.items ():
+            if type (value) is dict:
+                type_ = 'tree'
+                oid = write_tree_recursive (value)
+            else:
+                type_ = 'blob'
+                oid = value
+            entries.append ((name, oid, type_))
+
+        tree = ''.join (f'{type_} {oid} {name}\n'
+                        for name, oid, type_
+                        in sorted (entries))
+        return build.hash_obj (tree.encode (), 'tree')
+
+    return write_tree_recursive (index_as_tree)
 
 
 def iter_tree(goid):
@@ -51,6 +63,10 @@ def get_tree(goid, start_path=''):
             raise ValueError("type is neither tree nor blob")
     return res
 
+def get_index_tree ():
+    with build.get_index () as index:
+        return index
+
 def empty_working_dir():
     for root,dirs,files in os.walk('.', topdown=False):
         for file in files:
@@ -70,12 +86,35 @@ def empty_working_dir():
                 pass
 
 
-def read_tree(tree_goid):
-    empty_working_dir()
-    for path, goid in get_tree(tree_goid,start_path='./').items():
-        os.makedirs(os.path.dirname(path), exist_ok=True)#make dir, if exists-> dont alter
-        with open(path,"wb") as file:
-            file.write(build.get_obj(goid))
+def read_tree (tree_oid, update_working=False):
+    with build.get_index () as index:
+        index.clear ()
+        index.update (get_tree (tree_oid))
+
+        if update_working:
+            _checkout_index (index)
+
+
+def read_tree_merged (t_base, t_HEAD, t_other, update_working=False):
+    with build.get_index () as index:
+        index.clear ()
+        index.update (diff.merge_trees (
+            get_tree (t_base),
+            get_tree (t_HEAD),
+            get_tree (t_other)
+        ))
+
+        if update_working:
+            _checkout_index (index)
+
+def _checkout_index (index):
+    empty_working_dir ()
+    for path, oid in index.items ():
+        os.makedirs (os.path.dirname (f'./{path}'), exist_ok=True)
+        with open (path, 'wb') as f:
+            f.write (build.get_obj (oid, 'blob'))
+
+
 
 def ignore(path):
     return ".dagit" in Path(path).parts
@@ -83,21 +122,25 @@ def ignore(path):
 
 def commit(msg):
     commit= "tree " + write_tree() + "\n"
-    parent= build.get_ref('HEAD').value
-    if parent:
-        commit += "parent " + parent
+    head= build.get_ref('HEAD').value
+    if head:
+        commit += "parent " + head
+    merge_head = build.get_ref ('MERGE_HEAD').value
+    if merge_head:
+        commit += f'parent {merge_head}\n'
+        build.delete_ref ('MERGE_HEAD', deref=False)
     commit += "\n" + msg + "\n"
     obj = build.hash_obj(commit.encode(),"commit")
     build.update_ref('HEAD',build.RefValue(symbolic=False,value=obj))
     return obj
 
 
-Commit = namedtuple ('Commit', ['tree', 'parent', 'message'])
+Commit = namedtuple ('Commit', ['tree', 'parents', 'message'])
 
 
 def get_commit (goid):
-    parent = None
-
+    parents = []
+    print(goid)
     commit = build.get_obj (goid, 'commit').decode ()
     lines = iter (commit.splitlines ())
     for line in itertools.takewhile (operator.truth, lines):
@@ -105,19 +148,18 @@ def get_commit (goid):
         if key == 'tree':
             tree = value
         elif key == 'parent':
-            parent = value
-        if parent and tree:
+            parents.append (value)
+        if parents and tree:
             break
 
     message = '\n'.join (lines)
-
-    return Commit (tree=tree, parent=parent, message=message)
+    return Commit (tree=tree, parents=parents, message=message)
 
 def checkout(name):
     goid=get_goid(name)
     #print(goid)
     commit = get_commit(goid)
-    read_tree(commit.tree)
+    read_tree (commit.tree, update_working=True)
     #build.update_ref('HEAD',build.RefValue(symbolic=False,value=goid))
     if is_branch(name):
         head= build.RefValue(symbolic=True, value="refs/heads/"+name)
@@ -151,6 +193,17 @@ def get_goid(name):
 
     assert False, f'Unknown name: ' + name
 
+def get_working_tree ():
+    result = {}
+    for root, _, filenames in os.walk ('.'):
+        for filename in filenames:
+            path = os.path.relpath (f'{root}/{filename}')
+            if ignore(path) or not os.path.isfile (path):
+                continue
+            with open (path, 'rb') as f:
+                result[path] = build.hash_obj (f.read ())
+    return result
+
 
 def get_commit_and_parents(goids):
     goids=deque(goids)
@@ -164,7 +217,31 @@ def get_commit_and_parents(goids):
         yield goid
 
         commit=get_commit(goid)
-        goids.appendleft(commit.parent)
+        # Return first parent next
+        goids.extendleft (commit.parents[:1])
+        # Return other parents later
+        goids.extend (commit.parents[1:])
+
+
+def iter_objects_in_commits (goids):
+    visited = set ()
+    def iter_objects_in_tree (goid):
+        visited.add (goid)
+        yield goid
+        for type_, goid, _ in iter_tree (goid):
+            if goid not in visited:
+                if type_ == 'tree':
+                    yield from iter_objects_in_tree (goid)
+                else:
+                    visited.add (goid)
+                    yield goid
+
+    for goid in get_commit_and_parents (goids):
+        yield goid
+        commit = get_commit (goid)
+        if commit.tree not in visited:
+            yield from iter_objects_in_tree (commit.tree)
+
 
 def create_branch(name,goid):
     build.update_ref("refs/heads/"+name, build.RefValue(symbolic=False,value=goid))
@@ -190,3 +267,62 @@ def get_branch_name ():
 def iter_branch_names ():
     for refname, _ in build.iter_refs ('refs/heads/'):
         yield os.path.relpath (refname, 'refs/heads/')
+
+def reset (oid):
+    build.update_ref ('HEAD', build.RefValue (symbolic=False, value=oid))
+
+def merge (other):
+    HEAD = build.get_ref ('HEAD').value
+    assert HEAD
+    merge_base = get_merge_base (other, HEAD)
+    c_other = get_commit (other)
+        
+    # Handle fast-forward merge
+    if merge_base == HEAD:
+        read_tree (c_other.tree, update_working=True)
+        build.update_ref ('HEAD',
+                         build.RefValue (symbolic=False, value=other))
+        print ('Fast-forward merge, no need to commit')
+        return
+
+    build.update_ref ('MERGE_HEAD', build.RefValue (symbolic=False, value=other))
+    c_base = get_commit (merge_base)
+    c_HEAD = get_commit (HEAD)
+    read_tree_merged (c_base.tree, c_HEAD.tree, c_other.tree, update_working=True)
+    print ('Merged in working tree\nPlease commit')
+
+
+def get_merge_base (oid1, oid2):
+    parents1 = set (get_commit_and_parents ({oid1}))
+
+    for oid in get_commit_and_parents ({oid2}):
+        if oid in parents1:
+            return oid
+
+
+def is_ancestor_of (commit, maybe_ancestor):
+    return maybe_ancestor in get_commit_and_parents ({commit})
+
+def add (filenames):
+    def add_file (filename):
+        # Normalize path
+        filename = os.path.relpath (filename)
+        with open (filename, 'rb') as f:
+            oid = build.hash_obj (f.read ())
+        index[filename] = oid
+
+    def add_directory (dirname):
+        for root, _, filenames in os.walk (dirname):
+            for filename in filenames:
+                # Normalize path
+                path = os.path.relpath (f'{root}/{filename}')
+                if ignore (path) or not os.path.isfile (path):
+                    continue
+                add_file (path)
+
+    with build.get_index () as index:
+        for name in filenames:
+            if os.path.isfile (name):
+                add_file (name)
+            elif os.path.isdir (name):
+                add_directory (name)
