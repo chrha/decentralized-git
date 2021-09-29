@@ -154,7 +154,7 @@ def log (args):
         #print ("commit "+ goid + '\n')
         _print_commit (goid, commit, refs.get (goid))
 
-        goid = commit.parent
+        goid = commit.parents
 
 
 def _print_commit (oid, commit, refs=None):

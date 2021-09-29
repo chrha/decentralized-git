@@ -124,7 +124,7 @@ def commit(msg):
     commit= "tree " + write_tree() + "\n"
     head= build.get_ref('HEAD').value
     if head:
-        commit += "parent " + head
+        commit += "parent " + head + '\n'
     merge_head = build.get_ref ('MERGE_HEAD').value
     if merge_head:
         commit += f'parent {merge_head}\n'
@@ -140,27 +140,25 @@ Commit = namedtuple ('Commit', ['tree', 'parents', 'message'])
 
 def get_commit (goid):
     parents = []
-    print(goid)
     commit = build.get_obj (goid, 'commit').decode ()
     lines = iter (commit.splitlines ())
     for line in itertools.takewhile (operator.truth, lines):
-        key, value = line.split (' ', 1)
+        try:
+            key, value = line.split (' ', 1) #might cause bug
+        except:
+            break
         if key == 'tree':
             tree = value
         elif key == 'parent':
             parents.append (value)
-        if parents and tree:
-            break
 
     message = '\n'.join (lines)
     return Commit (tree=tree, parents=parents, message=message)
 
 def checkout(name):
     goid=get_goid(name)
-    #print(goid)
     commit = get_commit(goid)
     read_tree (commit.tree, update_working=True)
-    #build.update_ref('HEAD',build.RefValue(symbolic=False,value=goid))
     if is_branch(name):
         head= build.RefValue(symbolic=True, value="refs/heads/"+name)
     else:
