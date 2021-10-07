@@ -11,7 +11,7 @@ number_of_peers = 0
 async def peer_connected(websocket, path):
     global number_of_peers
     new_peer = await websocket.recv()
-    await websocket.send(json.dumps(peers))
+    await websocket.send(json.dumps({'peers' : peers}))
     peers.append(new_peer)
     number_of_peers += 1
 
