@@ -1,11 +1,15 @@
 import asyncio
 import websockets
 import json
-async def message():
+import sys
+
+
+async def message(message):
     async with websockets.connect("ws://localhost:2223") as socket:
-        msg = input("What :")
-        await socket.send(json.dumps({ 'message' : msg}))
+        await socket.send(message)
 
 
 if __name__ == '__main__':
-    asyncio.get_event_loop().run_until_complete(message())
+    #msg = sys.argv[1]
+    p = json.dumps({"show" : "5555555"})
+    asyncio.get_event_loop().run_until_complete(message(p))

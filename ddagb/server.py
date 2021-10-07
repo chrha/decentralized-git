@@ -4,6 +4,8 @@ import websockets
 import asyncio
 import random
 import json
+import db
+import os
 port = random.randint(1000,5000)
 #store all peers in server impl
 #local client sends to local server that then sends to the peers, listen on two sockets maybe
@@ -11,21 +13,42 @@ peers = []
 my_path = f"ws://localhost:{port}"
 #when a local client connects to this channel and sends a commit, it will be sent to the rest of the peers
 async def send_commit_to_peer(websocket, path):
-    message = await websocket.recv()
-    for peer in peers:
-        async with websockets.connect(peer) as socket:
-            await socket.send(message)
+    global peers
+    global port
+    payload = await websocket.recv()
+    msg = json.loads(payload)
+
+    if "commit" in msg:
+        os.mkdir(f"../{port}")
+        db.put_db(msg["commit"].encode(), payload.encode(), f"../{port}/ledger.db".encode())
+    elif 'show' in msg:
+        print(db.get_db(msg["show"].encode(), f"../{port}/ledger.db".encode()))
+
+    if peers:
+        for peer in peers:
+            async with websockets.connect(peer) as socket:
+                await socket.send(payload)
 
 #connected to by other peers to recive commit, and update peers
 async def recive_commit_from_peer(websocket, path):
     global peers
-    m = await websocket.recv()
-    message = json.loads(m)
-    if 'message' in message:
-        print(message['message'])
+    global port
+    payload = await websocket.recv()
+    message = json.loads(payload)
+
+
+    if 'show' in message:
+        print(db.get_db(message["show"].encode(), f"../{port}/ledger.db".encode()))
     elif 'peers' in message:
-        peers = message['peers']
-        peers.remove(my_path)
+        peers = peers + message['peers']
+        peers = list(dict.fromkeys(peers))
+        try:
+            peers.remove(my_path)
+        except:
+            pass
+    elif 'commit' in message:
+        os.mkdir(f"../{port}")
+        db.put_db(message["commit"].encode(), payload.encode(), f"../{port}/ledger.db".encode())
 
 
 
@@ -33,7 +56,10 @@ async def fetch_peers():
     global peers
     async with websockets.connect("ws://localhost:5555") as socket:
         await socket.send(my_path)
-        peers = await socket.recv()
+        payload = await socket.recv()
+        msg = json.loads(payload)
+        peers = peers + msg['peers']
+        peers = list(dict.fromkeys(peers))
 
 
 
