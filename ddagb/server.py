@@ -61,7 +61,7 @@ async def recive_commit_from_peer(websocket, path):
         hash=f'objects/{message["file"]}'
         os.makedirs(os.path.dirname(hash),exist_ok=True )
         with open(hash, 'wb') as f:
-            f.write(msg['body'].encode())
+            f.write(message['body'].encode())
 
 
 async def fetch_peers():
