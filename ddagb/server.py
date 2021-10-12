@@ -80,6 +80,8 @@ async def fetch_peers():
 async def disconnect():
     async with websockets.connect("ws://localhost:5555") as socket:
         await socket.send(my_path)
+        payload = await socket.recv()
+
 
 if __name__ == '__main__':
     try:

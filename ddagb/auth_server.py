@@ -10,6 +10,7 @@ peers = []
 number_of_peers = 0
 async def peer_connected(websocket, path):
     global number_of_peers
+    global peers
     new_peer = await websocket.recv()
     await websocket.send(json.dumps({'peers' : peers}))
     if new_peer in peers:
