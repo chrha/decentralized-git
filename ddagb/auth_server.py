@@ -12,8 +12,14 @@ async def peer_connected(websocket, path):
     global number_of_peers
     new_peer = await websocket.recv()
     await websocket.send(json.dumps({'peers' : peers}))
-    peers.append(new_peer)
-    number_of_peers += 1
+    if new_peer in peers:
+        print(f'Peer {new_peer} has disconnected')
+        peers.remove(new_peer)
+        number_of_peers -= 1
+    else:
+        print(f'Peer {new_peer} has connected')
+        peers.append(new_peer)
+        number_of_peers += 1
 
     #send update to peers
     for peer in peers:

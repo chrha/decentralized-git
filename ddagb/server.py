@@ -6,6 +6,8 @@ import random
 import json
 import db
 import os
+
+
 port = random.randint(1000,5000)
 #os.makedirs("remote",exist_ok=True )
 os.makedirs("remote/objects",exist_ok=True)
@@ -75,13 +77,18 @@ async def fetch_peers():
         peers = peers + msg['peers']
         peers = list(dict.fromkeys(peers))
 
-
+async def disconnect():
+    async with websockets.connect("ws://localhost:5555") as socket:
+        await socket.send(my_path)
 
 if __name__ == '__main__':
-
-    asyncio.get_event_loop().run_until_complete(fetch_peers())
-    start_server1 = websockets.serve(send_commit_to_peer,'localhost',2223)
-    start_server2 = websockets.serve(recive_commit_from_peer,'localhost',port)
-    asyncio.get_event_loop().run_until_complete(start_server1)
-    asyncio.get_event_loop().run_until_complete(start_server2)
-    asyncio.get_event_loop().run_forever()
+    try:
+        asyncio.get_event_loop().run_until_complete(fetch_peers())
+        start_server1 = websockets.serve(send_commit_to_peer,'localhost',2223)
+        start_server2 = websockets.serve(recive_commit_from_peer,'localhost',port)
+        asyncio.get_event_loop().run_until_complete(start_server1)
+        asyncio.get_event_loop().run_until_complete(start_server2)
+        asyncio.get_event_loop().run_forever()
+    finally:
+        asyncio.get_event_loop().run_until_complete(disconnect())
+    

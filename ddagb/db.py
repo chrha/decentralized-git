@@ -52,5 +52,5 @@ def get_all_values(address):
     it.seek_to_first()
     return list(it)
 
-print(get_all_values("remote/dag.db"))
+#print(get_all_values("remote/dag.db"))
 
