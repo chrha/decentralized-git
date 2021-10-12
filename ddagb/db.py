@@ -1,4 +1,5 @@
 import rocksdb
+import json
 
 def put_db(key, value, address):
     db = rocksdb.DB(address, rocksdb.Options(create_if_missing=True))
@@ -12,23 +13,24 @@ def append_commit(file,body):
     body=body.encode()
     type, empty , data = body.partition(b'\x00')
     data=data.decode()
-    #data=data.split("\n")
+    data_list=data.split("\n")
     type=type.decode()
     if type== "commit":
-        t_data= data.getline().split(" ",1)[1]
+        t_data= data_list[0].split(" ",1)[1]
         parent_list=[]
-
-        while True:
-            tmp=data.getline()
-            if "parent" in tmp:
-                parent, p_data= data.getline().split(" ",1)
+        i = 1
+        while(i < 3):
+            try:
+                parent, p_data= data_list[i].split(" ",1)
+            except:
+                break
+            if "parent" in parent:
                 parent_list.append(p_data)
             else:
                 break
+            i+=1
 
-
-
-        msg= tmp
+        msg = ''.join(data_list[i:])
 
         tot=json.dumps({
             "tree": t_data,
@@ -36,3 +38,19 @@ def append_commit(file,body):
             "message": msg
         })
         put_db(file.encode(),tot.encode(),"remote/dag.db".encode())
+
+def get_all_keys(address):
+    db = rocksdb.DB(address, rocksdb.Options(create_if_missing=True))
+    it = db.iterkeys()
+    it.seek_to_first()
+    return list(it)
+
+
+def get_all_values(address):
+    db = rocksdb.DB(address, rocksdb.Options(create_if_missing=True))
+    it = db.itervalues()
+    it.seek_to_first()
+    return list(it)
+
+print(get_all_values("remote/dag.db"))
+

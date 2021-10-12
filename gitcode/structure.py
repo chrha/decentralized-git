@@ -142,17 +142,18 @@ def get_commit (goid):
     parents = []
     commit = build.get_obj (goid, 'commit').decode ()
     lines = iter (commit.splitlines ())
+    message = ""
     for line in itertools.takewhile (operator.truth, lines):
         try:
             key, value = line.split (' ', 1) #might cause bug
         except:
+            message = line
             break
         if key == 'tree':
             tree = value
         elif key == 'parent':
             parents.append (value)
-
-    message = '\n'.join (lines)
+    message = message + '\n'.join (lines)
     return Commit (tree=tree, parents=parents, message=message)
 
 def checkout(name):
