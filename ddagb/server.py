@@ -7,7 +7,8 @@ import json
 import db
 import os
 port = random.randint(1000,5000)
-os.makedirs("objects", exist_ok=True)
+#os.makedirs("remote",exist_ok=True )
+os.makedirs("remote/objects",exist_ok=True)
 #store all peers in server impl
 #local client sends to local server that then sends to the peers, listen on two sockets maybe
 peers = []
@@ -20,16 +21,17 @@ async def send_commit_to_peer(websocket, path):
     msg = json.loads(payload)
 
     if "commit" in msg:
-        os.mkdir(f"../{port}")
-        db.put_db(msg["commit"].encode(), payload.encode(), f"../{port}/ledger.db".encode())
+        os.makedirs("remote",exist_ok=True )
+        db.put_db(msg["commit"].encode(), payload.encode(), f"remote/ledger.db".encode())
     elif 'show' in msg:
-        print(db.get_db(msg["show"].encode(), f"../{port}/ledger.db".encode()))
-    elif 'file' in msg:
-        print(msg['file']+" : " + msg['body'])
-        hash=f'objects/{msg["file"]}'
+        print(db.get_db(msg["show"].encode(), f"remote/ledger.db".encode()))
+    elif "file" in msg:
+        db.append_commit(msg["file"],msg["body"])
+        hash=f'remote/objects/{msg["file"]}'
         os.makedirs(os.path.dirname(hash),exist_ok=True )
         with open(hash, 'wb') as f:
-            f.write(msg['body'].encode())
+            f.write(msg["body"].encode())
+
     if peers:
         for peer in peers:
             async with websockets.connect(peer) as socket:
@@ -44,7 +46,7 @@ async def recive_commit_from_peer(websocket, path):
 
 
     if 'show' in message:
-        print(db.get_db(message["show"].encode(), f"../{port}/ledger.db".encode()))
+        print(db.get_db(message["show"].encode(), f"remote/ledger.db".encode()))
     elif 'peers' in message:
         peers = peers + message['peers']
         peers = list(dict.fromkeys(peers))
@@ -53,15 +55,15 @@ async def recive_commit_from_peer(websocket, path):
         except:
             pass
     elif 'commit' in message:
-        os.mkdir(f"../{port}")
-        db.put_db(message["commit"].encode(), payload.encode(), f"../{port}/ledger.db".encode())
+        os.makedirs("remote",exist_ok=True )
+        db.put_db(message["commit"].encode(), payload.encode(), f"remote/ledger.db".encode())
 
     elif 'file' in message:
-        print(message['file']+" : " + message['body'])
-        hash=f'objects/{message["file"]}'
+        print(message["file"]+" : " + message["body"])
+        hash=f'remote/objects/{message["file"]}'
         os.makedirs(os.path.dirname(hash),exist_ok=True )
         with open(hash, 'wb') as f:
-            f.write(message['body'].encode())
+            f.write(message["body"].encode())
 
 
 async def fetch_peers():
@@ -78,8 +80,8 @@ async def fetch_peers():
 if __name__ == '__main__':
 
     asyncio.get_event_loop().run_until_complete(fetch_peers())
-    #start_server1 = websockets.serve(send_commit_to_peer,'localhost',2223)
+    start_server1 = websockets.serve(send_commit_to_peer,'localhost',2223)
     start_server2 = websockets.serve(recive_commit_from_peer,'localhost',port)
-    #asyncio.get_event_loop().run_until_complete(start_server1)
+    asyncio.get_event_loop().run_until_complete(start_server1)
     asyncio.get_event_loop().run_until_complete(start_server2)
     asyncio.get_event_loop().run_forever()

@@ -5,7 +5,7 @@ from collections import namedtuple
 from contextlib import contextmanager
 import shutil
 import json
-
+import subprocess
 
 
 
@@ -123,6 +123,23 @@ def fetch_object_if_missing (goid, remote_git_dir):
                  f'{GIT_DIR}/objects/{goid}')
 
 def push_object (oid, remote_git_dir):
-    remote_git_dir += '/.ugit'
+    #remote_git_dir += '.dagit' # ändrade här
     shutil.copy (f'{GIT_DIR}/objects/{oid}',
                  f'{remote_git_dir}/objects/{oid}')
+
+    send_file(oid)
+
+def send_file(goid):
+    with open(f"{GIT_DIR}/objects/{goid}", 'rb') as f:
+        data= f.read().decode()
+    msg=json.dumps({
+        "file": goid,
+        "body": data
+    })
+    command= f"python3 ../../ddagb/client.py \'{msg}\'"
+
+    os.system(command)
+    """with subprocess.Popen (
+            ['python3', '../ddagb/client.py', msg],
+            stdin=subprocess.PIPE) as proc:
+        proc.communicate()"""
