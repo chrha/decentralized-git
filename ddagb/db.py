@@ -9,7 +9,7 @@ def get_db(key, address):
     db = rocksdb.DB(address, rocksdb.Options(create_if_missing=True))
     return db.get(bytes(key), address)
 
-def append_commit(file,body):
+def append_commit(file,body,address):
     body=body.encode()
     type, empty , data = body.partition(b'\x00')
     data=data.decode()
@@ -37,7 +37,7 @@ def append_commit(file,body):
             "parents": parent_list,
             "message": msg
         })
-        put_db(file.encode(),tot.encode(),"remote/dag.db".encode())
+        put_db(file.encode(),tot.encode(),address.encode())
 
 def get_all_keys(address):
     db = rocksdb.DB(address, rocksdb.Options(create_if_missing=True))
