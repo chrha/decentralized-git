@@ -40,11 +40,12 @@ def push (remote_path, refname):
     local_objects = set (structure.iter_objects_in_commits ({local_ref}))
     objects_to_push = local_objects - remote_objects
 
+    #TODO: sort commits
+
     # Push missing objects
     for oid in objects_to_push:
         build.push_object (oid, remote_path)
 
     # Update server ref to our value
-    with build.change_git_dir (remote_path):
-        build.update_ref (refname,
-                         build.RefValue (symbolic=False, value=local_ref))
+    
+    build.send_ref_remote(refname)

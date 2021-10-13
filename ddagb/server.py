@@ -9,14 +9,12 @@ import os
 
 
 port = random.randint(1000,5000)
-#os.makedirs("remote",exist_ok=True )
-
-#store all peers in server impl
-#local client sends to local server that then sends to the peers, listen on two sockets maybe
 peers = []
 my_path = f"ws://localhost:{port}"
-remote = f"{port}/remote/objects"
-os.makedirs(remote,exist_ok=True)
+remote_obj = f"{port}/remote/.dagit/objects"
+remote_path = f"{port}/remote/.dagit/"
+ledger_path = f"{port}/dag.db"
+os.makedirs(remote_obj,exist_ok=True)
 #when a local client connects to this channel and sends a commit, it will be sent to the rest of the peers
 async def send_commit_to_peer(websocket, path):
     global peers
@@ -26,8 +24,13 @@ async def send_commit_to_peer(websocket, path):
 
 
     if "file" in msg:
-        db.append_commit(msg["file"],msg["body"],f'{remote}/dag.db')
-        hash=f'{remote}/{msg["file"]}'
+        db.append_commit(msg["file"],msg["body"], ledger_path)
+        hash=f'{remote_obj}/{msg["file"]}'
+        os.makedirs(os.path.dirname(hash),exist_ok=True )
+        with open(hash, 'wb') as f:
+            f.write(msg["body"].encode())
+    elif "ref" in msg:
+        hash=f'{remote_path}/{msg["ref"]}'
         os.makedirs(os.path.dirname(hash),exist_ok=True )
         with open(hash, 'wb') as f:
             f.write(msg["body"].encode())
@@ -41,7 +44,7 @@ async def send_commit_to_peer(websocket, path):
 async def recive_commit_from_peer(websocket, path):
     global peers
     global port
-    global remote
+    global remote_obj
     payload = await websocket.recv()
     message = json.loads(payload)
 
@@ -55,8 +58,14 @@ async def recive_commit_from_peer(websocket, path):
         except:
             pass
     elif 'file' in message:
-        db.append_commit(message['file'],message['body'],f'{remote}/dag.db')
-        hash=f"{remote}/{message['file']}"
+        db.append_commit(message['file'],message['body'], ledger_path)
+        hash=f"{remote_obj}/{message['file']}"
+        os.makedirs(os.path.dirname(hash),exist_ok=True )
+        with open(hash, 'wb') as f:
+            f.write(message["body"].encode())
+        await websocket.send("thx")
+    elif "ref" in message:
+        hash=f'{remote_path}/{message["ref"]}'
         os.makedirs(os.path.dirname(hash),exist_ok=True )
         with open(hash, 'wb') as f:
             f.write(message["body"].encode())
@@ -67,20 +76,30 @@ async def recive_commit_from_peer(websocket, path):
         await send_all_files(message["fetch"])
 
 async def send_all_files(path):
-    #only send commit files, not blobs or trees
-    #fix pls
-    keys = db.get_all_keys(f'{remote}/dag.db')
-    print(keys)
-    for goid in keys:
-        with open(f"{remote}/{goid.decode()}", 'rb') as f:
+
+    onlyfiles = [f for f in os.listdir(remote_obj) if os.path.isfile(os.path.join(remote_obj, f))]
+    for goid in onlyfiles:
+        with open(f"{remote_obj}/{goid}", 'rb') as f:
             data= f.read().decode()
         msg=json.dumps({
-            "file": goid.decode(),
+            "file": goid,
             "body": data
         })
         async with websockets.connect(path) as socket:
             await socket.send(msg)
             payload = await socket.recv()
+    refs = [f for f in os.listdir(f'{remote_path}/refs/heads') if os.path.isfile(os.path.join(f'{remote_path}/refs/heads', f))]
+    for ref in refs:
+        with open(f'{remote_path}/refs/heads/{ref}', 'rb') as f:
+            data= f.read().decode()
+        msg=json.dumps({
+            "ref": f'/refs/heads/{ref}',
+            "body": data
+        })
+        async with websockets.connect(path) as socket:
+            await socket.send(msg)
+            payload = await socket.recv()
+    
 
 
 async def fetch_peers():
