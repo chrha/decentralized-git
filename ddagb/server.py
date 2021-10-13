@@ -11,9 +11,12 @@ import os
 port = random.randint(1000,5000)
 peers = []
 my_path = f"ws://localhost:{port}"
-remote_obj = f"{port}/remote/.dagit/objects"
-remote_path = f"{port}/remote/.dagit/"
+remote_path = f"{port}/remote/.dagit"
+remote_obj = f"{remote_path}/objects"
+remote_ref = f"{remote_path}/refs/heads"
 ledger_path = f"{port}/dag.db"
+
+os.makedirs(remote_ref,exist_ok=True)
 os.makedirs(remote_obj,exist_ok=True)
 #when a local client connects to this channel and sends a commit, it will be sent to the rest of the peers
 async def send_commit_to_peer(websocket, path):
