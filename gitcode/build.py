@@ -5,7 +5,7 @@ from collections import namedtuple
 from contextlib import contextmanager
 import shutil
 import json
-
+import subprocess
 
 
 
@@ -73,6 +73,12 @@ def update_ref(ref,value, deref=True):
     with open (ref_path, 'w') as file:
         file.write(value)
 
+def send_ref_remote(ref, deref=True):
+    ref_i = _get_ref_internal(ref,deref)[0]
+    ref_path= GIT_DIR+'/'+ref_i
+    os.makedirs(os.path.dirname(ref_path), exist_ok=True)
+    send_ref(ref_path, ref)
+
 
 def get_ref(ref,deref=True):
     return _get_ref_internal(ref,deref)[1]
@@ -123,6 +129,46 @@ def fetch_object_if_missing (goid, remote_git_dir):
                  f'{GIT_DIR}/objects/{goid}')
 
 def push_object (oid, remote_git_dir):
-    remote_git_dir += '/.ugit'
+    #remote_git_dir += '.dagit' # ändrade här
     shutil.copy (f'{GIT_DIR}/objects/{oid}',
                  f'{remote_git_dir}/objects/{oid}')
+
+    send_file(oid)
+
+def send_file(goid):
+    with open(f"{GIT_DIR}/objects/{goid}", 'rb') as f:
+        data= f.read().decode()
+    msg=json.dumps({
+        "file": goid,
+        "body": data
+    })
+    command= f"python3 ../../ddagb/client.py \'{msg}\'"
+
+    os.system(command)
+    """with subprocess.Popen (
+            ['python3', '../ddagb/client.py', msg],
+            stdin=subprocess.PIPE) as proc:
+        proc.communicate()"""
+
+def send_ref(ref_path, ref):
+    with open(ref_path, 'rb') as f:
+        data= f.read().decode()
+    msg=json.dumps({
+        "ref": ref,
+        "body": data
+    })
+    command= f"python3 ../../ddagb/client.py \'{msg}\'"
+
+    os.system(command)
+    """with subprocess.Popen (
+            ['python3', '../ddagb/client.py', msg],
+            stdin=subprocess.PIPE) as proc:
+        proc.communicate()"""
+
+def isType(obj, type):
+    with open (GIT_DIR +"/objects/" + obj, 'rb') as file: #was OBJ_DIR
+        obj = file.read()
+
+    t, empty , data = obj.partition(b'\x00')
+    t = t.decode()
+    return t == type

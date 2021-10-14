@@ -6,12 +6,18 @@ import random
 import json
 import db
 import os
+
+
 port = random.randint(1000,5000)
-os.makedirs("objects", exist_ok=True)
-#store all peers in server impl
-#local client sends to local server that then sends to the peers, listen on two sockets maybe
 peers = []
 my_path = f"ws://localhost:{port}"
+remote_path = f"{port}/remote/.dagit"
+remote_obj = f"{remote_path}/objects"
+remote_ref = f"{remote_path}/refs/heads"
+ledger_path = f"{port}/dag.db"
+
+os.makedirs(remote_ref,exist_ok=True)
+os.makedirs(remote_obj,exist_ok=True)
 #when a local client connects to this channel and sends a commit, it will be sent to the rest of the peers
 async def send_commit_to_peer(websocket, path):
     global peers
@@ -19,17 +25,25 @@ async def send_commit_to_peer(websocket, path):
     payload = await websocket.recv()
     msg = json.loads(payload)
 
-    if "commit" in msg:
-        os.mkdir(f"../{port}")
-        db.put_db(msg["commit"].encode(), payload.encode(), f"../{port}/ledger.db".encode())
-    elif 'show' in msg:
-        print(db.get_db(msg["show"].encode(), f"../{port}/ledger.db".encode()))
-    elif 'file' in msg:
-        print(msg['file']+" : " + msg['body'])
-        hash=f'objects/{msg["file"]}'
+
+    if "file" in msg:
+        #TODO check that parent commit is in db, close socket if not and blacklist peer (maybe?)
+        #add only files that are pointed to by the current filesystem (trees and blobs)
+        try:
+            db.append_commit(msg["file"],msg["body"], ledger_path)
+        except:
+            print(msg["file"])
+            return
+        hash=f'{remote_obj}/{msg["file"]}'
         os.makedirs(os.path.dirname(hash),exist_ok=True )
         with open(hash, 'wb') as f:
-            f.write(msg['body'].encode())
+            f.write(msg["body"].encode())
+    elif "ref" in msg:
+        hash=f'{remote_path}/{msg["ref"]}'
+        os.makedirs(os.path.dirname(hash),exist_ok=True )
+        with open(hash, 'wb') as f:
+            f.write(msg["body"].encode())
+
     if peers:
         for peer in peers:
             async with websockets.connect(peer) as socket:
@@ -39,29 +53,62 @@ async def send_commit_to_peer(websocket, path):
 async def recive_commit_from_peer(websocket, path):
     global peers
     global port
+    global remote_obj
     payload = await websocket.recv()
     message = json.loads(payload)
 
 
-    if 'show' in message:
-        print(db.get_db(message["show"].encode(), f"../{port}/ledger.db".encode()))
-    elif 'peers' in message:
+    
+    if 'peers' in message:
         peers = peers + message['peers']
         peers = list(dict.fromkeys(peers))
         try:
             peers.remove(my_path)
         except:
             pass
-    elif 'commit' in message:
-        os.mkdir(f"../{port}")
-        db.put_db(message["commit"].encode(), payload.encode(), f"../{port}/ledger.db".encode())
-
     elif 'file' in message:
-        print(message['file']+" : " + message['body'])
-        hash=f'objects/{message["file"]}'
+        db.append_commit(message['file'],message['body'], ledger_path)
+        hash=f"{remote_obj}/{message['file']}"
         os.makedirs(os.path.dirname(hash),exist_ok=True )
         with open(hash, 'wb') as f:
-            f.write(message['body'].encode())
+            f.write(message["body"].encode())
+        await websocket.send("thx")
+    elif "ref" in message:
+        hash=f'{remote_path}/{message["ref"]}'
+        os.makedirs(os.path.dirname(hash),exist_ok=True )
+        with open(hash, 'wb') as f:
+            f.write(message["body"].encode())
+        await websocket.send("thx")
+    
+    elif "fetch" in message:
+        await websocket.send("OK")
+        await send_all_files(message["fetch"])
+
+async def send_all_files(path):
+
+    onlyfiles = [f for f in os.listdir(remote_obj) if os.path.isfile(os.path.join(remote_obj, f))]
+    for goid in onlyfiles:
+        with open(f"{remote_obj}/{goid}", 'rb') as f:
+            data= f.read().decode()
+        msg=json.dumps({
+            "file": goid,
+            "body": data
+        })
+        async with websockets.connect(path) as socket:
+            await socket.send(msg)
+            payload = await socket.recv()
+    refs = [f for f in os.listdir(f'{remote_path}/refs/heads') if os.path.isfile(os.path.join(f'{remote_path}/refs/heads', f))]
+    for ref in refs:
+        with open(f'{remote_path}/refs/heads/{ref}', 'rb') as f:
+            data= f.read().decode()
+        msg=json.dumps({
+            "ref": f'/refs/heads/{ref}',
+            "body": data
+        })
+        async with websockets.connect(path) as socket:
+            await socket.send(msg)
+            payload = await socket.recv()
+    
 
 
 async def fetch_peers():
@@ -73,13 +120,27 @@ async def fetch_peers():
         peers = peers + msg['peers']
         peers = list(dict.fromkeys(peers))
 
+async def fetch_data():
+    if peers:
+        async with websockets.connect(peers[0]) as socket:
+            await socket.send(json.dumps({"fetch":my_path}))
+            payload = await socket.recv()
+
+async def disconnect():
+    async with websockets.connect("ws://localhost:5555") as socket:
+        await socket.send(my_path)
+        payload = await socket.recv()
 
 
 if __name__ == '__main__':
-
-    asyncio.get_event_loop().run_until_complete(fetch_peers())
-    #start_server1 = websockets.serve(send_commit_to_peer,'localhost',2223)
-    start_server2 = websockets.serve(recive_commit_from_peer,'localhost',port)
-    #asyncio.get_event_loop().run_until_complete(start_server1)
-    asyncio.get_event_loop().run_until_complete(start_server2)
-    asyncio.get_event_loop().run_forever()
+    try:
+        asyncio.get_event_loop().run_until_complete(fetch_peers())
+        start_server1 = websockets.serve(send_commit_to_peer,'localhost',2223)
+        start_server2 = websockets.serve(recive_commit_from_peer,'localhost',port)
+        asyncio.get_event_loop().run_until_complete(start_server1)
+        asyncio.get_event_loop().run_until_complete(start_server2)
+        asyncio.get_event_loop().run_until_complete(fetch_data())
+        asyncio.get_event_loop().run_forever()
+    finally:
+        asyncio.get_event_loop().run_until_complete(disconnect())
+    
