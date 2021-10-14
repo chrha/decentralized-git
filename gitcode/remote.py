@@ -45,7 +45,7 @@ def push (remote_path, refname):
     #TODO: sort commits
 
     objects_to_push = sort_commits(objects_to_push)
-
+    #objects_to_push.reverse()
     # Push missing objects
     for oid in objects_to_push:
         build.push_object (oid, remote_path)

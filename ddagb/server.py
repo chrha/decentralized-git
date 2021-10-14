@@ -27,7 +27,13 @@ async def send_commit_to_peer(websocket, path):
 
 
     if "file" in msg:
-        db.append_commit(msg["file"],msg["body"], ledger_path)
+        #TODO check that parent commit is in db, close socket if not and blacklist peer (maybe?)
+        #add only files that are pointed to by the current filesystem (trees and blobs)
+        try:
+            db.append_commit(msg["file"],msg["body"], ledger_path)
+        except:
+            print(msg["file"])
+            return
         hash=f'{remote_obj}/{msg["file"]}'
         os.makedirs(os.path.dirname(hash),exist_ok=True )
         with open(hash, 'wb') as f:

@@ -1,3 +1,4 @@
+from os import error
 import rocksdb
 import json
 
@@ -37,13 +38,17 @@ def append_commit(file,body,address):
             "parents": parent_list,
             "message": msg
         })
-        put_db(file.encode(),tot.encode(),address.encode())
+        #patch for multiple parents
+        if parent_list == [] or parent_list[0] in get_all_keys(address):
+            put_db(file.encode(),tot.encode(),address.encode())
+        else:
+            raise ValueError(f"Commit parent not in ledger")
 
 def get_all_keys(address):
     db = rocksdb.DB(address, rocksdb.Options(create_if_missing=True))
     it = db.iterkeys()
     it.seek_to_first()
-    return list(it)
+    return [k.decode() for k in list(it)]
 
 
 def get_all_values(address):
