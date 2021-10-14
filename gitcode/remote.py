@@ -55,6 +55,7 @@ def push (remote_path, refname):
     build.send_ref_remote(refname)
 
 def sort_commits(list_obj):
+    #implementation does not consider multiple parents
     commit_list =  [c for c in list_obj if build.isType(c,'commit')]
     blob_tree_obj = [o for o in list_obj if not o in commit_list]
     cp_list = [(c,structure.get_commit(c).parents) for c in commit_list]
