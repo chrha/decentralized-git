@@ -164,3 +164,11 @@ def send_ref(ref_path, ref):
             ['python3', '../ddagb/client.py', msg],
             stdin=subprocess.PIPE) as proc:
         proc.communicate()"""
+
+def isType(obj, type):
+    with open (GIT_DIR +"/objects/" + obj, 'rb') as file: #was OBJ_DIR
+        obj = file.read()
+
+    t, empty , data = obj.partition(b'\x00')
+    t = t.decode()
+    return t == type

@@ -1,6 +1,8 @@
 import os
 import build
 import structure
+import itertools
+import functools
 
 REMOTE_REFS_BASE = 'refs/heads/'
 LOCAL_REFS_BASE = 'refs/remote/'
@@ -42,6 +44,8 @@ def push (remote_path, refname):
 
     #TODO: sort commits
 
+    objects_to_push = sort_commits(objects_to_push)
+
     # Push missing objects
     for oid in objects_to_push:
         build.push_object (oid, remote_path)
@@ -49,3 +53,17 @@ def push (remote_path, refname):
     # Update server ref to our value
     
     build.send_ref_remote(refname)
+
+def sort_commits(list_obj):
+    commit_list =  [c for c in list_obj if build.isType(c,'commit')]
+    blob_tree_obj = [o for o in list_obj if not o in commit_list]
+    cp_list = [(c,structure.get_commit(c).parents) for c in commit_list]
+    sort_list = [x[0] for x in cp_list if not (x[1] and (x[1][0] in commit_list))]
+    cp_list.remove((sort_list[0],[]))
+
+    for c1 in sort_list:
+        for c2, p2 in cp_list:
+            if p2[0] == c1:
+                sort_list.append(c2)
+                cp_list.remove((c2,p2))
+    return sort_list + blob_tree_obj
