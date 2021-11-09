@@ -33,23 +33,24 @@ async def send_commit_to_peer(websocket, path):
         os.makedirs(os.path.dirname(hash),exist_ok=True )
         with open(hash, 'wb') as f:
             f.write(msg["body"].encode())
-
+        del msg['ref']
+        del msg['body']
         for key in msg:
-            if key != "ref":
-                try:
-                    db.append_commit(key, msg[key], ledger_path)
-                except:
-                    print(key)
-                    return
-                hash=f'{remote_obj}/{key}'
-                os.makedirs(os.path.dirname(hash),exist_ok=True )
-                with open(hash, 'wb') as f:
-                    f.write(msg[key].encode())
+            try:
+                db.append_commit(key, msg[key], ledger_path)
+            except:
+                print(key)
+                return
+            hash=f'{remote_obj}/{key}'
+            os.makedirs(os.path.dirname(hash),exist_ok=True )
+            with open(hash, 'wb') as f:
+                f.write(msg[key].encode())
     
     if peers:
         for peer in peers:
             async with websockets.connect(peer) as socket:
                 await socket.send(payload)
+                await socket.recv()
 
 #connected to by other peers to recive commit, and update peers
 async def recive_commit_from_peer(websocket, path):
@@ -68,18 +69,27 @@ async def recive_commit_from_peer(websocket, path):
             peers.remove(my_path)
         except:
             pass
-    elif 'file' in message:
-        db.append_commit(message['file'],message['body'], ledger_path)
-        hash=f"{remote_obj}/{message['file']}"
-        os.makedirs(os.path.dirname(hash),exist_ok=True )
-        with open(hash, 'wb') as f:
-            f.write(message["body"].encode())
-        await websocket.send("thx")
+    
     elif "ref" in message:
+        sec.is_valid(message)
         hash=f'{remote_path}/{message["ref"]}'
         os.makedirs(os.path.dirname(hash),exist_ok=True )
         with open(hash, 'wb') as f:
             f.write(message["body"].encode())
+        del message['ref']
+        del message['body']
+        for key in message:
+            print(2)
+            try:
+                db.append_commit(key, message[key], ledger_path)
+            except:
+                print(key)
+                return
+            hash=f'{remote_obj}/{key}'
+            os.makedirs(os.path.dirname(hash),exist_ok=True )
+            with open(hash, 'wb') as f:
+                f.write(message[key].encode())
+        
         await websocket.send("thx")
     
     elif "fetch" in message:
