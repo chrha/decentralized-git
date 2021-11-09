@@ -6,6 +6,7 @@ import random
 import json
 import db
 import os
+import sec
 
 
 port = random.randint(1000,5000)
@@ -25,25 +26,26 @@ async def send_commit_to_peer(websocket, path):
     payload = await websocket.recv()
     msg = json.loads(payload)
 
+    if "ref" in msg:
+        sec.is_valid(msg)
 
-    if "file" in msg:
-        #TODO check that parent commit is in db, close socket if not and blacklist peer (maybe?)
-        #add only files that are pointed to by the current filesystem (trees and blobs)
-        try:
-            db.append_commit(msg["file"],msg["body"], ledger_path)
-        except:
-            print(msg["file"])
-            return
-        hash=f'{remote_obj}/{msg["file"]}'
-        os.makedirs(os.path.dirname(hash),exist_ok=True )
-        with open(hash, 'wb') as f:
-            f.write(msg["body"].encode())
-    elif "ref" in msg:
         hash=f'{remote_path}/{msg["ref"]}'
         os.makedirs(os.path.dirname(hash),exist_ok=True )
         with open(hash, 'wb') as f:
             f.write(msg["body"].encode())
 
+        for key in msg:
+            if key != "ref":
+                try:
+                    db.append_commit(key, msg[key], ledger_path)
+                except:
+                    print(key)
+                    return
+                hash=f'{remote_obj}/{key}'
+                os.makedirs(os.path.dirname(hash),exist_ok=True )
+                with open(hash, 'wb') as f:
+                    f.write(msg[key].encode())
+    
     if peers:
         for peer in peers:
             async with websockets.connect(peer) as socket:

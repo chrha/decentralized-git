@@ -73,13 +73,6 @@ def update_ref(ref,value, deref=True):
     with open (ref_path, 'w') as file:
         file.write(value)
 
-def send_ref_remote(ref, deref=True):
-    ref_i = _get_ref_internal(ref,deref)[0]
-    ref_path= GIT_DIR+'/'+ref_i
-    os.makedirs(os.path.dirname(ref_path), exist_ok=True)
-    send_ref(ref_path, ref)
-
-
 def get_ref(ref,deref=True):
     return _get_ref_internal(ref,deref)[1]
 
@@ -133,37 +126,27 @@ def push_object (oid, remote_git_dir):
     shutil.copy (f'{GIT_DIR}/objects/{oid}',
                  f'{remote_git_dir}/objects/{oid}')
 
-    send_file(oid)
 
-def send_file(goid):
-    with open(f"{GIT_DIR}/objects/{goid}", 'rb') as f:
-        data= f.read().decode()
-    msg=json.dumps({
-        "file": goid,
-        "body": data
-    })
-    command= f"python3 ../../ddagb/client.py \'{msg}\'"
+def send_commit(oids, ref, deref=True):
+    ref_i = _get_ref_internal(ref,deref)[0]
+    ref_path= GIT_DIR+'/'+ref_i
+    os.makedirs(os.path.dirname(ref_path), exist_ok=True)
 
-    os.system(command)
-    """with subprocess.Popen (
-            ['python3', '../ddagb/client.py', msg],
-            stdin=subprocess.PIPE) as proc:
-        proc.communicate()"""
-
-def send_ref(ref_path, ref):
     with open(ref_path, 'rb') as f:
         data= f.read().decode()
-    msg=json.dumps({
+    payload = {
         "ref": ref,
         "body": data
-    })
-    command= f"python3 ../../ddagb/client.py \'{msg}\'"
+    }
+
+    for goid in oids:
+        with open(f"{GIT_DIR}/objects/{goid}", 'rb') as f:
+            data= f.read().decode()
+        payload[goid] = data
+    
+    command= f"python3 ../../ddagb/client.py \'{json.dumps(payload)}\'"
 
     os.system(command)
-    """with subprocess.Popen (
-            ['python3', '../ddagb/client.py', msg],
-            stdin=subprocess.PIPE) as proc:
-        proc.communicate()"""
 
 def isType(obj, type):
     with open (GIT_DIR +"/objects/" + obj, 'rb') as file: #was OBJ_DIR

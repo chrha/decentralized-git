@@ -50,9 +50,9 @@ def push (remote_path, refname):
     for oid in objects_to_push:
         build.push_object (oid, remote_path)
 
+
+    build.send_commit(objects_to_push, refname)
     # Update server ref to our value
-    
-    build.send_ref_remote(refname)
 
 def sort_commits(list_obj):
     #implementation does not consider multiple parents
