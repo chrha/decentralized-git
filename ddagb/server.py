@@ -27,7 +27,10 @@ async def send_commit_to_peer(websocket, path):
     msg = json.loads(payload)
 
     if "ref" in msg:
-        sec.is_valid(msg)
+        ref = msg['ref']
+        if not sec.is_valid(msg, ledger_path):
+            await websocket.send("Invalid commit")
+            return
 
         hash=f'{remote_path}/{msg["ref"]}'
         os.makedirs(os.path.dirname(hash),exist_ok=True )
@@ -37,7 +40,7 @@ async def send_commit_to_peer(websocket, path):
         del msg['body']
         for key in msg:
             try:
-                db.append_commit(key, msg[key], ledger_path)
+                db.append_commit(key, msg[key], ledger_path, ref, port)
             except:
                 print(key)
                 return
@@ -71,7 +74,11 @@ async def recive_commit_from_peer(websocket, path):
             pass
     
     elif "ref" in message:
-        sec.is_valid(message)
+        ref = message['ref']
+        if not sec.is_valid(message, ledger_path):
+            await websocket.send("Invalid commit")
+            return
+
         hash=f'{remote_path}/{message["ref"]}'
         os.makedirs(os.path.dirname(hash),exist_ok=True )
         with open(hash, 'wb') as f:
@@ -79,9 +86,8 @@ async def recive_commit_from_peer(websocket, path):
         del message['ref']
         del message['body']
         for key in message:
-            print(2)
             try:
-                db.append_commit(key, message[key], ledger_path)
+                db.append_commit(key, message[key], ledger_path, ref, port)
             except:
                 print(key)
                 return

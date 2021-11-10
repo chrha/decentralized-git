@@ -10,7 +10,7 @@ def get_db(key, address):
     db = rocksdb.DB(address, rocksdb.Options(create_if_missing=True))
     return db.get(bytes(key), address)
 
-def append_commit(file,body,address):
+def append_commit(file,body,address, ref, id):
     body=body.encode()
     type, empty , data = body.partition(b'\x00')
     data=data.decode()
@@ -36,13 +36,13 @@ def append_commit(file,body,address):
         tot=json.dumps({
             "tree": t_data,
             "parents": parent_list,
-            "message": msg
+            "message": msg,
+            "user" : id,
+            "branch" : ref
         })
-        #patch for multiple parents
-        if parent_list == [] or parent_list[0] in get_all_keys(address):
-            put_db(file.encode(),tot.encode(),address.encode())
-        else:
-            raise ValueError(f"Commit parent not in ledger")
+        #find new way to generate key, hash rest of block also to generate key, might cause issues with parent hash,
+        #since git commit hash will then be different from DAG hash.
+        put_db(file.encode(),tot.encode(),address.encode())
 
 def get_all_keys(address):
     db = rocksdb.DB(address, rocksdb.Options(create_if_missing=True))
@@ -57,5 +57,9 @@ def get_all_values(address):
     it.seek_to_first()
     return list(it)
 
-#print(get_all_values("remote/dag.db"))
+
+for e in get_all_values("1910/dag.db"):
+    print(e)
+    print('/n')
+
 
