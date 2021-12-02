@@ -25,11 +25,12 @@ async def send_commit_to_peer(websocket, path):
     global port
     payload = await websocket.recv()
     msg = json.loads(payload)
-
+    #print(payload)
     if "ref" in msg:
         ref = msg['ref']
         if not sec.is_valid(msg, ledger_path):
             await websocket.send("Invalid commit")
+            print(" NOT VALID")
             return
 
         hash=f'{remote_path}/{msg["ref"]}'
@@ -48,7 +49,7 @@ async def send_commit_to_peer(websocket, path):
             os.makedirs(os.path.dirname(hash),exist_ok=True )
             with open(hash, 'wb') as f:
                 f.write(msg[key].encode())
-    
+
     if peers:
         for peer in peers:
             async with websockets.connect(peer) as socket:
@@ -64,7 +65,7 @@ async def recive_commit_from_peer(websocket, path):
     message = json.loads(payload)
 
 
-    
+
     if 'peers' in message:
         peers = peers + message['peers']
         peers = list(dict.fromkeys(peers))
@@ -72,7 +73,7 @@ async def recive_commit_from_peer(websocket, path):
             peers.remove(my_path)
         except:
             pass
-    
+
     elif "ref" in message:
         ref = message['ref']
         if not sec.is_valid(message, ledger_path):
@@ -95,9 +96,9 @@ async def recive_commit_from_peer(websocket, path):
             os.makedirs(os.path.dirname(hash),exist_ok=True )
             with open(hash, 'wb') as f:
                 f.write(message[key].encode())
-        
+
         await websocket.send("thx")
-    
+
     elif "fetch" in message:
         await websocket.send("OK")
         await send_all_files(message["fetch"])
@@ -126,7 +127,7 @@ async def send_all_files(path):
         async with websockets.connect(path) as socket:
             await socket.send(msg)
             payload = await socket.recv()
-    
+
 
 
 async def fetch_peers():
@@ -153,12 +154,11 @@ async def disconnect():
 if __name__ == '__main__':
     try:
         asyncio.get_event_loop().run_until_complete(fetch_peers())
-        start_server1 = websockets.serve(send_commit_to_peer,'localhost',2223)
+        #start_server1 = websockets.serve(send_commit_to_peer,'localhost',2223)
         start_server2 = websockets.serve(recive_commit_from_peer,'localhost',port)
-        asyncio.get_event_loop().run_until_complete(start_server1)
+        #asyncio.get_event_loop().run_until_complete(start_server1)
         asyncio.get_event_loop().run_until_complete(start_server2)
         asyncio.get_event_loop().run_until_complete(fetch_data())
         asyncio.get_event_loop().run_forever()
     finally:
         asyncio.get_event_loop().run_until_complete(disconnect())
-    

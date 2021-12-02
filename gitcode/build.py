@@ -101,6 +101,7 @@ def iter_refs(prefix='',deref=True):
     refs = ['HEAD', 'MERGE_HEAD']
     for root, _, filenames in os.walk(GIT_DIR+'/refs'):
         root= os.path.relpath(root, GIT_DIR)
+    
         refs.extend(root+'/' + name for name in filenames)
 
     for ref in refs:
@@ -124,7 +125,7 @@ def fetch_object_if_missing (goid, remote_git_dir):
 def push_object (oid, remote_git_dir):
     #remote_git_dir += '.dagit' # ändrade här
     shutil.copy (f'{GIT_DIR}/objects/{oid}',
-                 f'{remote_git_dir}/objects/{oid}')
+                 f'{remote_git_dir}/.dagit/objects/{oid}')
 
 
 def send_commit(oids, ref, deref=True):
@@ -143,7 +144,7 @@ def send_commit(oids, ref, deref=True):
         with open(f"{GIT_DIR}/objects/{goid}", 'rb') as f:
             data= f.read().decode()
         payload[goid] = data
-    
+
     command= f"python3 ../../ddagb/client.py \'{json.dumps(payload)}\'"
 
     os.system(command)

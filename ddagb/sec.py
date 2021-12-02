@@ -8,7 +8,7 @@ def is_valid(commit, ledger):
 
 def has_parent(commit, address):
     for key in commit:
-        
+
         value=commit[key].encode()
         type, empty , data = value.partition(b'\x00')
         data=data.decode()
@@ -32,7 +32,8 @@ def has_parent(commit, address):
             msg = ''.join(data_list[i:])
 
             #patch for multiple parents
-            if parent_list == [] or parent_list[0] in db.get_all_keys(address):
-                return True 
+            dag_parents = db.find_dag_parents(parent_list,address)
+            if parent_list == [] or dag_parents != []:
+                return True
             else:
                 return False
