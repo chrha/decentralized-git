@@ -7,8 +7,8 @@ import json
 import db
 import os
 import sec
-
-
+from Crypto.PublicKey import RSA
+from base64 import b64encode
 port = random.randint(1000,5000)
 peers = []
 my_path = f"ws://localhost:{port}"
@@ -16,6 +16,16 @@ remote_path = f"{port}/remote/.dagit"
 remote_obj = f"{remote_path}/objects"
 remote_ref = f"{remote_path}/refs/heads"
 ledger_path = f"{port}/dag.db"
+
+#Generate new RSA keys
+pr_key=RSA.generate(2048)
+pu_key=pr_key.public_key()
+
+priv_key = pr_key.export_key().decode()
+pub_key= pu_key.export_key().decode()
+
+
+
 
 os.makedirs(remote_ref,exist_ok=True)
 os.makedirs(remote_obj,exist_ok=True)
@@ -52,7 +62,7 @@ async def send_commit_to_peer(websocket, path):
 
     if peers:
         for peer in peers:
-            async with websockets.connect(peer) as socket:
+            async with websockets.connect(peer[0]) as socket:
                 await socket.send(payload)
                 await socket.recv()
 
@@ -62,15 +72,28 @@ async def recive_commit_from_peer(websocket, path):
     global port
     global remote_obj
     payload = await websocket.recv()
+
     message = json.loads(payload)
 
 
 
-    if 'peers' in message:
-        peers = peers + message['peers']
-        peers = list(dict.fromkeys(peers))
+
+    if "peers" in message:
+        #peers = peers + message['peers']
+        peer_list=message["peers"]
+        unique_peers=[]
+        for elem in peer_list:
+            if elem not in peers:
+                unique_peers.append(elem)
+        #peer_list= list(dict.fromkeys(peer_list))
+        peers = peers + unique_peers
+        print("received peers: ")
+        print(peers)
+        #peers = list(dict.fromkeys(peers))
+        print("currently stored peers: " )
         try:
-            peers.remove(my_path)
+            peers.remove([my_path,pub_key])
+            print(peers)
         except:
             pass
 
@@ -103,6 +126,8 @@ async def recive_commit_from_peer(websocket, path):
         await websocket.send("OK")
         await send_all_files(message["fetch"])
 
+# Oatch for sending all files in one json
+# Right now, adding a new peer after a push, it will not get all file data
 async def send_all_files(path):
 
     onlyfiles = [f for f in os.listdir(remote_obj) if os.path.isfile(os.path.join(remote_obj, f))]
@@ -129,25 +154,43 @@ async def send_all_files(path):
             payload = await socket.recv()
 
 
+#denna skickar t auth som i sin tur sparar path och kallar på de andras
+# receive commit from peer......ta det med chris imorgon
 
 async def fetch_peers():
     global peers
-    async with websockets.connect("ws://localhost:5555") as socket:
-        await socket.send(my_path)
-        payload = await socket.recv()
-        msg = json.loads(payload)
-        peers = peers + msg['peers']
-        peers = list(dict.fromkeys(peers))
+    #key=b64encode(pub_key).decode('utf-8')
+    peer_list= [my_path , pub_key] #b64encode((my_path,pub_key)).decode('utf-8')
 
+    msgz=json.dumps( {"peer" : peer_list} )
+    #print("gonna get the peers to my path: " + my_path)
+    #print("sending: " + msgz)
+
+    async with websockets.connect("ws://localhost:5555") as socket:
+
+        await socket.send(msgz)
+        #print("sent message to retrieve")
+        payload = await socket.recv()
+        #print("awaiting peers to be retrieved")
+        msg = json.loads(payload)
+        peer_list=msg["peers"]
+        peers = peers + peer_list
+        #print(peers)
+        #peers = list(dict.fromkeys(peers))
+    #print("have currently these peers stored: "+peers)
 async def fetch_data():
     if peers:
-        async with websockets.connect(peers[0]) as socket:
+        async with websockets.connect(peers[0][0]) as socket:
             await socket.send(json.dumps({"fetch":my_path}))
             payload = await socket.recv()
 
 async def disconnect():
+    peer_l= [my_path , pub_key]
+
+    msgz=json.dumps( {"peer" : peer_l} )
+    print(my_path)
     async with websockets.connect("ws://localhost:5555") as socket:
-        await socket.send(my_path)
+        await socket.send(msgz)
         payload = await socket.recv()
 
 
