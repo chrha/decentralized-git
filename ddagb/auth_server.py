@@ -43,6 +43,7 @@ async def peer_connected(websocket, path):
         if peer != new_peer_key:
             async with websockets.connect(peer[0]) as socket:
                 await socket.send(json.dumps({"peers" : peers}))
+                await socket.recv()
 
 if __name__ == '__main__':
 

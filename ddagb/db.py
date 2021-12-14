@@ -51,6 +51,7 @@ def append_commit(file,body,address, ref, pub_key, priv_key):
         print("about to sign")
         try:
             signature = pkcs1_15.new(priv_key).sign(dag_h)
+            signature = binascii.hexlify(signature).decode('ascii')
             print("just signed")
         except:
             print("failed to sign")
@@ -58,7 +59,7 @@ def append_commit(file,body,address, ref, pub_key, priv_key):
         #since git commit hash will then be different from DAG hash.
         put_db(dag_hash.encode(),tot.encode(),address.encode())
 
-        return signature
+        return json.dumps({"sig" : signature, "block_hash": dag_hash, "block_data" : tot})
     return
 
 def get_block(file,body,address, ref,pu_key,pub_key, signature):
@@ -150,6 +151,6 @@ def get_all_values(address):
     return list(it)
 
 
-#for e in get_all_values("1910/dag.db"):
-    #print(e)
-    #print('/n')
+#for e in get_all_values("2422/dag.db"):
+#    print(e)
+#    print('/n')

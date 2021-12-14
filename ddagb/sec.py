@@ -37,3 +37,15 @@ def has_parent(commit, address):
                 return True
             else:
                 return False
+
+#if "ref" in msg:
+        #ref = msg['ref']
+        #r= SHA256.new(ref.encode())
+        #signature = pkcs1_15.new(pr_key).sign(r)
+        #bla=binascii.hexlify(signature).decode('ascii')
+        #bla2=binascii.unhexlify(bla)
+        #try:
+            #pkcs1_15.new(pu_key).verify(r,bla2)
+            #print("correct verification")
+        #except:
+            #print("unsuccessful verify")
