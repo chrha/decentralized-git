@@ -62,6 +62,13 @@ def append_commit(file,body,address, ref, pub_key, priv_key):
         return json.dumps({"sig" : signature, "block_hash": dag_hash, "block_data" : tot})
     return
 
+
+
+def add_block(block, address):
+    block = json.loads(block)
+    put_db(block['block_hash'].encode(), block['block_data'].encode(), address.encode())
+
+
 def get_block(file,body,address, ref,pu_key,pub_key, signature):
     body=body.encode()
     type, empty , data = body.partition(b'\x00')

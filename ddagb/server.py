@@ -49,6 +49,7 @@ async def send_commit_to_peer(websocket, path):
             await websocket.send("Invalid commit")
             print("NOT VALID")
             return
+        
 
         hash=f'{remote_path}/{msg["ref"]}'
         os.makedirs(os.path.dirname(hash),exist_ok=True )
@@ -63,7 +64,7 @@ async def send_commit_to_peer(websocket, path):
             block=db.append_commit(key, msg[key], ledger_path, ref, pub_key, pr_key)
             if block:
                 blocks.append(block)
-            
+                
                 #print(key + " Was not successfully added to db")
                 #return
             hash=f'{remote_obj}/{key}'
@@ -76,6 +77,7 @@ async def send_commit_to_peer(websocket, path):
             message= json.loads(payload)
             print("signatures exist")
             message["blocks"] = blocks
+            message["path"] = my_path
             #message["from"] = my_path
             payload=json.dumps(message)
 
@@ -117,7 +119,14 @@ async def recive_commit_from_peer(websocket, path):
         ref = message['ref']
         blocks = message['blocks']
         body = message['body']
+        key = get_peer_key(message['path'])
+        if not sec.is_signed(message, key):
+            await websocket.send("Invalid sign")
+            return 
         if not sec.is_valid(message, ledger_path):
+            await websocket.send("Invalid commit")
+            return
+        if not sec.is_owner(message, key, ledger_path):
             await websocket.send("Invalid commit")
             return
 
@@ -128,13 +137,9 @@ async def recive_commit_from_peer(websocket, path):
         del message['ref']
         del message['body']
         for block in blocks:
-            try:
-                #db.append_block(block, ledger_path)
-                pass
-            except:
-                print("Faild to append block")
-                return
+            db.add_block(block, ledger_path)
         del message['blocks']
+        del message['path']
         for key in message:
             hash=f'{remote_obj}/{key}'
             os.makedirs(os.path.dirname(hash),exist_ok=True )
@@ -155,6 +160,12 @@ async def recive_commit_from_peer(websocket, path):
     await websocket.send("badly formated message")
 # Oatch for sending all files in one json
 # Right now, adding a new peer after a push, it will not get all file data
+
+def get_peer_key(path):
+    for peer in peers:
+        if path == peer[0]:
+            return peer[1]
+    return ''
 async def send_all_files(path):
 
     onlyfiles = [f for f in os.listdir(remote_obj) if os.path.isfile(os.path.join(remote_obj, f))]
@@ -224,7 +235,7 @@ async def disconnect():
 if __name__ == '__main__':
     try:
         asyncio.get_event_loop().run_until_complete(fetch_peers())
-        start_server1 = websockets.serve(send_commit_to_peer,'localhost',2223)
+        start_server1 = websockets.serve(send_commit_to_peer,'localhost',2226)
         start_server2 = websockets.serve(recive_commit_from_peer,'localhost',port)
         asyncio.get_event_loop().run_until_complete(start_server1)
         asyncio.get_event_loop().run_until_complete(start_server2)
