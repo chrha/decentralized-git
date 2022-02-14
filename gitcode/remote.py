@@ -12,7 +12,7 @@ def fetch (remote_path):
     # Get refs from server
     refs = _get_remote_refs (remote_path, REMOTE_REFS_BASE)
     # Fetch missing objects by iterating and fetching on demand
-    
+
     for oid in structure.iter_objects_in_commits (refs.values ()):
         build.fetch_object_if_missing (oid, remote_path)
 
@@ -30,10 +30,12 @@ def _get_remote_refs (remote_path, prefix=''):
 def push (remote_path, refname):
     # Get refs data
     remote_refs = _get_remote_refs (remote_path)
+    #print(remote_path)
+    #print(remote_refs)
     remote_ref = remote_refs.get (refname)
     local_ref = build.get_ref (refname).value
     assert local_ref
-    
+
     # Don't allow force push
     assert not remote_ref or structure.is_ancestor_of (local_ref, remote_ref)
 
@@ -43,20 +45,24 @@ def push (remote_path, refname):
     objects_to_push = local_objects - remote_objects
 
     #TODO: sort commits
-
+    #print(objects_to_push)
+    if len(objects_to_push) == 0:
+        return
     objects_to_push = sort_commits(objects_to_push)
     #objects_to_push.reverse()
     # Push missing objects
     for oid in objects_to_push:
         build.push_object (oid, remote_path)
 
+
+    build.send_commit(objects_to_push, refname)
     # Update server ref to our value
-    
-    build.send_ref_remote(refname)
 
 def sort_commits(list_obj):
     #implementation does not consider multiple parents
     commit_list =  [c for c in list_obj if build.isType(c,'commit')]
+    if len(commit_list) == 1:
+        return list_obj
     blob_tree_obj = [o for o in list_obj if not o in commit_list]
     cp_list = [(c,structure.get_commit(c).parents) for c in commit_list]
     sort_list = [x[0] for x in cp_list if not (x[1] and (x[1][0] in commit_list))]
