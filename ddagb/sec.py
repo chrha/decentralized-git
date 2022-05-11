@@ -12,17 +12,16 @@ def is_valid(message, ledger):
         return True
 
 def is_signed(message, key):
-    print(key)
     key = RSA.importKey(key)
     for block in message["blocks"]:
         #try:
         block = json.loads(block)
         dag_h= SHA256.new(block['block_data'].encode())
         dag_hash=dag_h.hexdigest()
-        if dag_hash == block['block_hash']:
-            print("hash correct")
-        else:
-            print("hash incorrect !!!!!!!!!!")
+        #if dag_hash == block['block_hash']:
+            #print("hash correct")
+        #else:
+            #print("hash incorrect !!!!!!!!!!")
         signature = binascii.unhexlify(block['sig'])
         pkcs1_15.new(key).verify(dag_h, signature)
         #except:
@@ -65,10 +64,14 @@ def is_owner(message, key, ledger):
             parent_data = json.loads(db.get_db(parent.encode(), ledger))
             parent_ref = parent_data["branch"]
             parent_key = parent_data["user"]
-            print(f"appending to branch:{ref} same as {parent_ref}")
+            #print(f"appending to branch:{ref} same as {parent_ref}")
+            #print(ref)
+            if ref == "refs/heads/master":
+                #print("protecteded")
+                return True
             if parent_ref == ref:
                 if key != parent_key:
-                    print("did not add")
+                    #print("did not add")
                 # Check That they own the parent block, should be enough
                     return False
         return True

@@ -124,8 +124,9 @@ def fetch_object_if_missing (goid, remote_git_dir):
 
 def push_object (oid, remote_git_dir):
     #remote_git_dir += '.dagit' # ändrade här
-    shutil.copy (f'{GIT_DIR}/objects/{oid}',
-                 f'{remote_git_dir}/.dagit/objects/{oid}')
+    #shutil.copy (f'{GIT_DIR}/objects/{oid}',
+                 #f'{remote_git_dir}/.dagit/objects/{oid}')
+    pass
 
 
 def send_commit(oids, ref, deref=True):

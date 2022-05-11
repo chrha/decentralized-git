@@ -22,6 +22,7 @@ remote_path = f"{port}/remote/.dagit"
 remote_obj = f"{remote_path}/objects"
 remote_ref = f"{remote_path}/refs/heads"
 ledger_path = f"{port}/dag.db"
+vote_cnt = 0
 
 #Generate new RSA keys
 pr_key=RSA.generate(2048)
@@ -34,6 +35,14 @@ pub_key= pu_key.export_key().decode()
 os.makedirs(remote_ref,exist_ok=True)
 os.makedirs(remote_obj,exist_ok=True)
 #when a local client connects to this channel and sends a commit, it will be sent to the rest of the peers
+
+def add_file(filename, body):
+    hash=f'{remote_path}/{filename}'
+    os.makedirs(os.path.dirname(hash),exist_ok=True )
+    with open(hash, 'wb') as f:
+        f.write(body.encode())
+
+
 async def send_commit_to_peer(websocket, path):
     global peers
     global port
@@ -45,32 +54,35 @@ async def send_commit_to_peer(websocket, path):
     #message is a commit 
     if "ref" in msg:
         ref = msg['ref']
+        body = msg['body']
         if not sec.is_valid(msg, ledger_path):
             await websocket.send("Invalid commit")
             print("NOT VALID")
             return
-        
-
-        hash=f'{remote_path}/{msg["ref"]}'
-        os.makedirs(os.path.dirname(hash),exist_ok=True )
-        with open(hash, 'wb') as f:
-            f.write(msg["body"].encode())
+        if ref != "refs/heads/master":
+            add_file(ref, body)
+            
+            add_file("bajs1", "bajs")
         
         del msg['ref']
         del msg['body']
+        print(ref)
         for key in msg:
-            
-            print(key)
-            block=db.append_commit(key, msg[key], ledger_path, ref, pub_key, pr_key)
+            block=db.create_block(key, msg[key], ledger_path, ref, pub_key, pr_key)
             if block:
                 blocks.append(block)
+                if ref != "refs/heads/master":
+                    print("not master")
+                    db.add_block(block, ledger_path)
+                    add_file("bajs2", "bajs")
+            if ref != "refs/heads/master":
+                print(f"not master {ref}")
+                print(ref == "refs/heads/master")
+                add_file(ref, body)
                 
-                #print(key + " Was not successfully added to db")
-                #return
-            hash=f'{remote_obj}/{key}'
-            os.makedirs(os.path.dirname(hash),exist_ok=True )
-            with open(hash, 'wb') as f:
-                f.write(msg[key].encode())
+                
+
+    
 
     if peers:
         if blocks !=[]:
@@ -85,16 +97,20 @@ async def send_commit_to_peer(websocket, path):
             async with websockets.connect(peer[0]) as socket:
                 await socket.send(payload)
                 print(await socket.recv())
+    await websocket.send("OK")
+    
+        
 
 #connected to by other peers to recive commit, and update peers
 async def recive_commit_from_peer(websocket, path):
     global peers
     global port
     global remote_obj
+    global vote_cnt
     payload = await websocket.recv()
 
     message = json.loads(payload)
-
+    print("WE HVE rev ljhdflhdb")
 
 
     if "peers" in message:
@@ -114,39 +130,78 @@ async def recive_commit_from_peer(websocket, path):
             pass
         await websocket.send("peers recived" )
         return
-
+    elif "response" in message:
+        print(message["response"])
+        await websocket.send("OK response recived")
+        return
     elif "ref" in message:
         ref = message['ref']
         blocks = message['blocks']
         body = message['body']
-        key = get_peer_key(message['path'])
+        if message['path'] != my_path:
+            key = get_peer_key(message['path'])
+        else:
+            key = pub_key       
+
+        
+        if "vote" in message:
+            if message["vote"] == "y":
+                vote_cnt += 1
+
+            if vote_cnt < len(peers)*0.5:
+                await websocket.send(f"Vote recived at {my_path}")
+                return
+            print("consensus reached")
+            async with websockets.connect(message['path']) as socket:
+                await socket.send(json.dumps({"response" : f"{my_path} has made your request permanant"}))
+                print(await socket.recv())
+        
+        if ref == "refs/heads/master" and not "vote" in message:
+            await websocket.send("OK merge request recived")
+            await websocket.close()
+            va = input("y/n: ")
+            m = json.loads(payload)
+            m["vote"] = va
+            p = json.dumps(m)
+            for peer in peers:
+                async with websockets.connect(peer[0]) as socket:
+                    await socket.send(p)
+                    print(await socket.recv())
+            return
         if not sec.is_signed(message, key):
             await websocket.send("Invalid sign")
             return 
         if not sec.is_valid(message, ledger_path):
             await websocket.send("Invalid commit")
             return
+
         if not sec.is_owner(message, key, ledger_path):
             await websocket.send("Invalid commit")
             return
-
+        
+        
+        
         hash=f'{remote_path}/{message["ref"]}'
         os.makedirs(os.path.dirname(hash),exist_ok=True )
         with open(hash, 'wb') as f:
             f.write(message["body"].encode())
+
+        if message["vote"]:
+            del message["vote"]
         del message['ref']
         del message['body']
         for block in blocks:
             db.add_block(block, ledger_path)
+            add_file("bajs3", "bajs")
         del message['blocks']
         del message['path']
         for key in message:
-            hash=f'{remote_obj}/{key}'
-            os.makedirs(os.path.dirname(hash),exist_ok=True )
-            with open(hash, 'wb') as f:
-                f.write(message[key].encode())
+            add_file(key, message[key])
+            add_file("bajs4", "bajs")
 
-        await websocket.send("Blocks recived")
+        await websocket.send(f"Blocks recived at {my_path}")
+        if ref == "refs/heads/master":
+            vote_cnt = 0
         return
 
 

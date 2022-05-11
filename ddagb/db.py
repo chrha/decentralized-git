@@ -14,7 +14,8 @@ def get_db(key, address):
     db = rocksdb.DB(address, rocksdb.Options(create_if_missing=True))
     return db.get(bytes(key), address)
 
-def append_commit(file,body,address, ref, pub_key, priv_key):
+
+def create_block(file,body,address, ref, pub_key, priv_key):
     body=body.encode()
     type, empty , data = body.partition(b'\x00')
     data=data.decode()
@@ -57,7 +58,7 @@ def append_commit(file,body,address, ref, pub_key, priv_key):
             print("failed to sign")
         #find new way to generate key, hash rest of block also to generate key, might cause issues with parent hash,
         #since git commit hash will then be different from DAG hash.
-        put_db(dag_hash.encode(),tot.encode(),address.encode())
+        #put_db(dag_hash.encode(),tot.encode(),address.encode())
 
         return json.dumps({"sig" : signature, "block_hash": dag_hash, "block_data" : tot})
     return
