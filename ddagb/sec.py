@@ -14,27 +14,12 @@ def is_valid(message, ledger):
 def is_signed(message, key):
     key = RSA.importKey(key)
     for block in message["blocks"]:
-        #try:
         block = json.loads(block)
         dag_h= SHA256.new(block['block_data'].encode())
         dag_hash=dag_h.hexdigest()
-        #if dag_hash == block['block_hash']:
-            #print("hash correct")
-        #else:
-            #print("hash incorrect !!!!!!!!!!")
         signature = binascii.unhexlify(block['sig'])
         pkcs1_15.new(key).verify(dag_h, signature)
-        #except:
-        #    return False
     return True
-
-#done in is signed
-#def is_hashed_block():
-#    pass
-
-#skit i
-#def is_hashed_commit():
-#    pass
 
 def has_dag_parents(message, ledger):
      for block in message["blocks"]:
@@ -48,7 +33,6 @@ def has_dag_parents(message, ledger):
 
 
 
-#för att testa måste man kunna skicka till andra peers, just nu lyssnar bara en peer på commits
 def is_owner(message, key, ledger):
     #for each block (commit) check that they own branch
     #find first instance of ref and check the pub key of that block
@@ -64,15 +48,11 @@ def is_owner(message, key, ledger):
             parent_data = json.loads(db.get_db(parent.encode(), ledger))
             parent_ref = parent_data["branch"]
             parent_key = parent_data["user"]
-            #print(f"appending to branch:{ref} same as {parent_ref}")
-            #print(ref)
             if ref == "refs/heads/master":
-                #print("protecteded")
                 return True
             if parent_ref == ref:
                 if key != parent_key:
-                    #print("did not add")
-                # Check That they own the parent block, should be enough
+                    print("Invalid operation")
                     return False
         return True
 
@@ -107,15 +87,3 @@ def has_parent(commit, address):
                 return True
             else:
                 return False
-
-#if "ref" in msg:
-        #ref = msg['ref']
-        #r= SHA256.new(ref.encode())
-        #signature = pkcs1_15.new(pr_key).sign(r)
-        #bla=binascii.hexlify(signature).decode('ascii')
-        #bla2=binascii.unhexlify(bla)
-        #try:
-            #pkcs1_15.new(pu_key).verify(r,bla2)
-            #print("correct verification")
-        #except:
-            #print("unsuccessful verify")

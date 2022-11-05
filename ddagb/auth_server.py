@@ -16,17 +16,11 @@ async def peer_connected(websocket, path):
     msg= json.loads(payload)
 
     new_peer_key= msg["peer"]
-    #new_peer_key=b64decode(new_peer_key)
     await websocket.send(json.dumps({"peers" : peers}))
-    # Note to self, if we want to check using only path,
-    # make list of paths only and then check if it exists in peers 
     if new_peer_key in peers:
         print(f'Peer {new_peer_key[0]} has disconnected')
-        #peers_dict= dict(peers)
-        #peers_dict.pop(new_peer_key[0])
-        #peers= list(tuple(peers_dict.items()))
 
-        peers.remove(new_peer_key) #remove()
+        peers.remove(new_peer_key)
         number_of_peers -= 1
     else:
         print(f'Peer {new_peer_key[0]} has connected')

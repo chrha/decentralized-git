@@ -90,7 +90,6 @@ async def send_commit_to_peer(websocket, path):
             print("signatures exist")
             message["blocks"] = blocks
             message["path"] = my_path
-            #message["from"] = my_path
             payload=json.dumps(message)
 
         for peer in peers:
@@ -110,29 +109,24 @@ async def recive_commit_from_peer(websocket, path):
     payload = await websocket.recv()
 
     message = json.loads(payload)
-    print("WE HVE rev ljhdflhdb")
 
 
     if "peers" in message:
-        #peers = peers + message['peers']
         peer_list=message["peers"]
         unique_peers=[]
         for elem in peer_list:
             if elem not in peers:
                 unique_peers.append(elem)
-        #peer_list= list(dict.fromkeys(peer_list))
         peers = peers + unique_peers
-        print("received peers: ")
-        #peers = list(dict.fromkeys(peers))
         try:
             peers.remove([my_path,pub_key])
         except:
             pass
-        await websocket.send("peers recived" )
+        await websocket.send("Peers received" )
         return
     elif "response" in message:
         print(message["response"])
-        await websocket.send("OK response recived")
+        await websocket.send("OK response received")
         return
     elif "ref" in message:
         ref = message['ref']
@@ -151,7 +145,7 @@ async def recive_commit_from_peer(websocket, path):
             if vote_cnt < len(peers)*0.5:
                 await websocket.send(f"Vote recived at {my_path}")
                 return
-            print("consensus reached")
+            print("Consensus reached")
             async with websockets.connect(message['path']) as socket:
                 await socket.send(json.dumps({"response" : f"{my_path} has made your request permanant"}))
                 print(await socket.recv())
@@ -192,29 +186,17 @@ async def recive_commit_from_peer(websocket, path):
         del message['body']
         for block in blocks:
             db.add_block(block, ledger_path)
-            add_file("bajs3", "bajs")
         del message['blocks']
         del message['path']
         for key in message:
             add_file(key, message[key])
-            add_file("bajs4", "bajs")
 
         await websocket.send(f"Blocks recived at {my_path}")
         if ref == "refs/heads/master":
             vote_cnt = 0
         return
 
-
-
-        
-    #fixa fetch
-    #elif "fetch" in message:
-        #print("fff")
-        #await websocket.send("sdfsdfdsf")
-        #await send_all_files(message["fetch"])
-    await websocket.send("badly formated message")
-# Oatch for sending all files in one json
-# Right now, adding a new peer after a push, it will not get all file data
+    await websocket.send("Badly formated message")
 
 def get_peer_key(path):
     for peer in peers:
@@ -246,31 +228,19 @@ async def send_all_files(path):
             await socket.send(msg)
             payload = await socket.recv()
 
-
-#denna skickar t auth som i sin tur sparar path och kallar på de andras
-# receive commit from peer......ta det med chris imorgon
-
 async def fetch_peers():
     global peers
-    #key=b64encode(pub_key).decode('utf-8')
-    peer_list= [my_path , pub_key] #b64encode((my_path,pub_key)).decode('utf-8')
+    peer_list= [my_path , pub_key] 
 
     msgz=json.dumps( {"peer" : peer_list} )
-    #print("gonna get the peers to my path: " + my_path)
-    #print("sending: " + msgz)
 
     async with websockets.connect("ws://localhost:5555") as socket:
 
         await socket.send(msgz)
-        #print("sent message to retrieve")
         payload = await socket.recv()
-        #print("awaiting peers to be retrieved")
         msg = json.loads(payload)
         peer_list=msg["peers"]
         peers = peers + peer_list
-        #print(peers)
-        #peers = list(dict.fromkeys(peers))
-    #print("have currently these peers stored: "+peers)
 async def fetch_data():
     if peers:
         async with websockets.connect(peers[0][0]) as socket:

@@ -49,16 +49,15 @@ def create_block(file,body,address, ref, pub_key, priv_key):
         })
         dag_h= SHA256.new(tot.encode())
         dag_hash=dag_h.hexdigest()
-        print("about to sign")
         try:
             signature = pkcs1_15.new(priv_key).sign(dag_h)
             signature = binascii.hexlify(signature).decode('ascii')
-            print("just signed")
-        except:
-            print("failed to sign")
+        except Exception as err:
+            print(f"Unexpected {err=}, {type(err)=}")
+            raise
         #find new way to generate key, hash rest of block also to generate key, might cause issues with parent hash,
         #since git commit hash will then be different from DAG hash.
-        #put_db(dag_hash.encode(),tot.encode(),address.encode())
+        put_db(dag_hash.encode(),tot.encode(),address.encode())
 
         return json.dumps({"sig" : signature, "block_hash": dag_hash, "block_data" : tot})
     return
@@ -114,9 +113,6 @@ def get_block(file,body,address, ref,pu_key,pub_key, signature):
         except (ValueError, TypeError):
             print ("The signature is not valid.")
 
-        #find new way to generate key, hash rest of block also to generate key, might cause issues with parent hash,
-        #since git commit hash will then be different from DAG hash.
-
 
 
 
@@ -132,9 +128,7 @@ def find_dag_parents(parent_list, address):
         if block["commit"] in parent_list:
             dag_parents.append(key)
         if len(dag_parents)==len(parent_list):
-            #print(dag_parents)
             return dag_parents
-    #print(dag_parents)
     return dag_parents
 
 
@@ -157,8 +151,3 @@ def get_all_values(address):
     it = db.itervalues()
     it.seek_to_first()
     return list(it)
-
-
-#for e in get_all_values("2422/dag.db"):
-#    print(e)
-#    print('/n')
