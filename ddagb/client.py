@@ -7,8 +7,9 @@ BUFFER_SIZE = 4096
 
 
 async def message(message):
-    async with websockets.connect("ws://localhost:2226") as socket:
+    async with websockets.connect("ws://localhost:2225") as socket:
         await socket.send(message)
+        await socket.recv()
 
 
 if __name__ == '__main__':
